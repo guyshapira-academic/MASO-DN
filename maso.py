@@ -1,8 +1,11 @@
 from typing import Optional, Dict, Any
+from itertools import product
 
 import torch
 import torch.nn as nn
 from torch import Tensor
+
+import utils
 
 
 class MASOLayer(nn.Module):
@@ -105,10 +108,9 @@ class MASOLayer(nn.Module):
 
         return self.partitions_per_dim ** dim_out
 
-    def get_single_dim_local_partition_descriptor(self, k: int) -> Tensor:
+    def get_local_partitions_descriptor(self) -> Tensor:
         """
-        Returns the vector and a constant that define the local partitions for a
-        single dimension.
+        Returns the affine parameters that define the local partitions.
 
         Parameters:
             k (int): Index of the dimension
@@ -119,10 +121,36 @@ class MASOLayer(nn.Module):
         if isinstance(self.linear_operator, nn.Linear):
             A = self.linear_operator.weight
             b = self.linear_operator.bias
-            return A[k, :], b[k]
+            return A, b
         else:
             raise ValueError(
                 "The linear operator must be an instance of nn.Linear"
             )
 
+    def assign_local_partitions(self, x: Tensor, remove_redundant: bool) -> Tensor:
+        """
+        Takes a tensor of input values and assigns each value to a local
+        partition.
 
+        Parameters:
+            x (torch.Tensor): Input tensor
+            remove_redundant (bool): If True, drops partitions with no members.
+
+        Returns:
+            one-hot encoding of the assignment.
+        """
+        A, b = self.get_local_partitions_descriptor()
+        z = x @ A.T + b
+        partitions = list()
+        for comb in product([0, 1], repeat=z.shape[1]):
+            r = torch.ones(size=(z.shape[0],))
+            for column in range(z.shape[1]):
+                col = z[:, column] > 0
+                if not comb[column]:
+                    col = torch.logical_not(col)
+                r = torch.logical_and(r, col)
+            partitions.append(r)
+        partitions = torch.stack(partitions, dim=1)
+        if remove_redundant:
+            partitions = partitions[:, partitions.any(dim=0)]
+        return partitions
