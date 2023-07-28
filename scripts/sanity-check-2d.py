@@ -31,6 +31,14 @@ def get_data(
         x, y = datasets.make_moons(n_samples=total_size, noise=noise)
     elif type_ == "circles":
         x, y = datasets.make_circles(n_samples=total_size, noise=noise)
+    elif type_ == "both":
+        x_moons, y_moons = datasets.make_moons(n_samples=total_size, noise=noise)
+        x_circles, y_circles = datasets.make_circles(
+            n_samples=total_size, noise=noise, factor=0.5
+        )
+        x_moons = x_moons + 1.5
+        x = np.concatenate((x_moons, x_circles))
+        y = np.concatenate((y_moons, y_circles))
     else:
         raise ValueError(f"No such dataset type: {type_}")
 
@@ -54,7 +62,7 @@ def run(
     epochs: int = 100,
     name: Optional[str] = None,
 ) -> None:
-    net = maso.fc_network((2, 4, 4, 4, 1))
+    net = maso.fc_network((2, 8, 8, 8, 1))
     x_train, y_train, x_test, y_test = get_data(dataset, n_samples, noise)
 
     # Train the network
@@ -132,4 +140,13 @@ if __name__ == "__main__":
         epochs=epochs,
         batch_size=batch_size,
         name="circles",
+    )
+    run(
+        "both",
+        n_samples=10000,
+        noise=0.1,
+        lr=lr,
+        epochs=epochs,
+        batch_size=batch_size,
+        name="both",
     )
