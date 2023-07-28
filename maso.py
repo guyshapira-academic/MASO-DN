@@ -5,6 +5,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
+from tqdm import tqdm
+
+import utils
+
 
 class MASOLayer(nn.Module):
     """
@@ -104,12 +108,14 @@ class MASOLayer(nn.Module):
 
         return self.partitions_per_dim**dim_out
 
-    def get_local_partitions_descriptor(self) -> Tensor:
+    def get_local_partitions_descriptor(self, input_shape: Optional[Tuple[int, int, int]] = None) -> Tensor:
         """
         Returns the affine parameters that define the local partitions.
 
         Parameters:
             k (int): Index of the dimension
+            input_shape (tuple): Shape of the input tensor to the layer
+                required only if the linear operator is a convolutional layer.
 
         Returns:
             torch.Tensor: Local partition descriptor
@@ -117,6 +123,9 @@ class MASOLayer(nn.Module):
         if isinstance(self.linear_operator, nn.Linear):
             A = self.linear_operator.weight
             b = self.linear_operator.bias
+            return A, b
+        elif isinstance(self.linear_operator, nn.Conv2d):
+            A, b = utils.conv2d_to_linear(self.linear_operator, input_shape)
             return A, b
         else:
             raise ValueError("The linear operator must be an instance of nn.Linear")
@@ -133,12 +142,16 @@ class MASOLayer(nn.Module):
         Returns:
             one-hot encoding of the assignment.
         """
+        input_shape_ = x.shape
         if isinstance(self.activation_function, nn.Identity):
             return torch.ones(size=(x.shape[0], 1), dtype=torch.bool)
-        A, b = self.get_local_partitions_descriptor()
+        if isinstance(self.linear_operator, nn.Conv2d):
+            x = x.reshape(x.shape[0], -1)
+        A, b = self.get_local_partitions_descriptor(input_shape=input_shape_[1:])
         z = x @ A.T + b
         partitions = list()
-        for comb in product([0, 1], repeat=z.shape[1]):
+        element_sum = torch.zeros(size=(z.shape[0],))
+        for comb in tqdm(product([0, 1], repeat=z.shape[1]), total=2**z.shape[1]):
             r = torch.ones(size=(z.shape[0],))
             for column in range(z.shape[1]):
                 col = z[:, column] > 0
@@ -146,6 +159,9 @@ class MASOLayer(nn.Module):
                     col = torch.logical_not(col)
                 r = torch.logical_and(r, col)
             partitions.append(r)
+            element_sum += r
+            if element_sum.all():
+                break
         partitions = torch.stack(partitions, dim=1)
         if remove_redundant:
             partitions = partitions[:, partitions.any(dim=0)]
@@ -249,44 +265,19 @@ def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
 
 
 if __name__ == "__main__":
-    import matplotlib.pyplot as plt
-    import utils
-
-    # Create a simple network
-    net = MASODN(
-        MASOLayer(
-            linear_operator="fc",
-            linear_operator_kwargs={"in_features": 2, "out_features": 4},
-            activation_function="relu",
-        ),
-        MASOLayer(
-            linear_operator="fc",
-            linear_operator_kwargs={"in_features": 4, "out_features": 4},
-            activation_function="relu",
-        ),
-        MASOLayer(
-            linear_operator="fc",
-            linear_operator_kwargs={"in_features": 4, "out_features": 1},
-            activation_function="identity",
-        ),
+    maso_conv = MASOLayer(
+        linear_operator="conv",
+        linear_operator_kwargs={
+            "in_channels": 1,
+            "out_channels": 2,
+            "kernel_size": 3,
+            "stride": 1,
+            "padding": 0,
+        },
+        activation_function="relu",
     )
-
-    # Create grid of points
-    x = torch.linspace(-1, 1, 100)
-    y = torch.linspace(-1, 1, 100)
-    X, Y = torch.meshgrid(x, y, indexing="xy")
-    X = X.reshape(-1, 1)
-    Y = Y.reshape(-1, 1)
-    Z = torch.cat((X, Y), dim=1)
-
-    # Assign partitions
-    global_partitions = net.assign_global_partition(Z, remove_redundant=True)
-    num_partitions = global_partitions.shape[1]
-    print(f"Number of partitions: {num_partitions}")
-
-    # Plot partitions
-    global_partitions = global_partitions.detach().numpy()
-    global_partitions = global_partitions.reshape(100, 100, num_partitions)
-    boundary = utils.get_class_boundary(global_partitions)
-    plt.imshow(boundary, cmap="Greys", extent=[-1, 1, -1, 1])
-    plt.show()
+    x = torch.randn(7, 1, 5, 5)
+    y = maso_conv(x)
+    print(y.shape)
+    # print(maso_conv.num_partitions)
+    print(maso_conv.assign_local_partitions(x, remove_redundant=True))
