@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 from itertools import product
 
 import torch
@@ -27,6 +27,7 @@ class MASOLayer(nn.Module):
         activation_function_kwargs (dict): Keyword arguments to be passed to
             the activation function. Default: {}
     """
+
     def __init__(
         self,
         linear_operator: str = "fc",
@@ -47,21 +48,16 @@ class MASOLayer(nn.Module):
             self.linear_operator = nn.Linear(**linear_operator_kwargs)
         else:
             raise ValueError(
-                f"Invalid linear operator: {linear_operator}. "
-                "Must be one of: 'fc'"
+                f"Invalid linear operator: {linear_operator}. " "Must be one of: 'fc'"
             )
 
         # Initialize activation function
         if activation_function == "relu":
             self.activation_function = nn.ReLU(**activation_function_kwargs)
         elif activation_function == "leaky_relu":
-            self.activation_function = nn.LeakyReLU(
-                **activation_function_kwargs
-            )
+            self.activation_function = nn.LeakyReLU(**activation_function_kwargs)
         elif activation_function == "identity":
-            self.activation_function = nn.Identity(
-                **activation_function_kwargs
-            )
+            self.activation_function = nn.Identity(**activation_function_kwargs)
         else:
             raise ValueError(
                 f"Invalid activation function: {activation_function}. "
@@ -104,7 +100,7 @@ class MASOLayer(nn.Module):
         else:
             return 0
 
-        return self.partitions_per_dim ** dim_out
+        return self.partitions_per_dim**dim_out
 
     def get_local_partitions_descriptor(self) -> Tensor:
         """
@@ -121,9 +117,7 @@ class MASOLayer(nn.Module):
             b = self.linear_operator.bias
             return A, b
         else:
-            raise ValueError(
-                "The linear operator must be an instance of nn.Linear"
-            )
+            raise ValueError("The linear operator must be an instance of nn.Linear")
 
     def assign_local_partitions(self, x: Tensor, remove_redundant: bool) -> Tensor:
         """
@@ -137,6 +131,8 @@ class MASOLayer(nn.Module):
         Returns:
             one-hot encoding of the assignment.
         """
+        if isinstance(self.activation_function, nn.Identity):
+            return torch.ones(size=(x.shape[0], 1), dtype=torch.bool)
         A, b = self.get_local_partitions_descriptor()
         z = x @ A.T + b
         partitions = list()
@@ -154,24 +150,116 @@ class MASOLayer(nn.Module):
         return partitions
 
 
+class MASODN(nn.Sequential):
+    """
+    This class is an abstraction of a basic MASO deep network, which consists
+    of a sequence of MASO layers.
+
+    Parameters:
+        layers (list): List of MASO layers
+    """
+
+    def __init__(self, *layers: Tuple[MASOLayer, ...]):
+        super().__init__(*layers)
+
+    @property
+    def num_partitions(self) -> int:
+        """
+        Returns the number of partitions induced by the network.
+
+        Returns:
+            int: Number of partitions
+        """
+        num_partitions = 1
+        for layer in self:
+            num_partitions *= layer.num_partitions
+        return num_partitions
+
+    def assign_global_partition(
+        self, x: Tensor, l: Optional[int] = None, remove_redundant: bool = True
+    ) -> Tensor:
+        """
+        Takes a tensor of input values and assigns each value to a global
+        partition.
+
+        Parameters:
+            x (torch.Tensor): Input tensor
+            l (int): Index of the layer to use for the assignment. If None,
+                the last layer is used.
+            remove_redundant (bool): If True, drops partitions with no members.
+
+        Returns:
+            int: Index of the global partition
+        """
+        l = len(self) - 1 if l is None else l
+        z = x
+
+        global_partitions = [
+            torch.ones((x.shape[0],), dtype=torch.bool)
+        ]  # An updating list of partitions
+        # For each layer, get the partition assignments for the output of the
+        # previous layer, and update the list of partitions by taking the
+        # intersection of the previous partitions and the new partitions.
+        for idx in range(l):
+            layer = self[idx]
+            local_partitions = layer.assign_local_partitions(
+                z, remove_redundant=remove_redundant
+            )
+            new_global_partitions = list()
+            for i, j in product(
+                range(local_partitions.shape[1]), range(len(global_partitions))
+            ):
+                old_partition = global_partitions[j]
+                new_partition = local_partitions[:, i]
+                new_global = torch.logical_and(old_partition, new_partition)
+                if new_global.any():
+                    new_global_partitions.append(new_global)
+            z = layer(z)
+            global_partitions = new_global_partitions
+        global_partitions = torch.stack(global_partitions, dim=1)
+        return global_partitions
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import utils
-    # Test the MASOLayer class
-    layer = MASOLayer(
-        linear_operator="fc",
-        linear_operator_kwargs={"in_features": 2, "out_features": 6},
-        activation_function="relu",
+
+    # Create a simple network
+    net = MASODN(
+        MASOLayer(
+            linear_operator="fc",
+            linear_operator_kwargs={"in_features": 2, "out_features": 4},
+            activation_function="relu",
+        ),
+        MASOLayer(
+            linear_operator="fc",
+            linear_operator_kwargs={"in_features": 4, "out_features": 4},
+            activation_function="relu",
+        ),
+        MASOLayer(
+            linear_operator="fc",
+            linear_operator_kwargs={"in_features": 4, "out_features": 1},
+            activation_function="identity",
+        ),
     )
-    x, y = torch.linspace(-1, 1, 100), torch.linspace(-1, 1, 100)
+
+    # Create grid of points
+    x = torch.linspace(-1, 1, 100)
+    y = torch.linspace(-1, 1, 100)
     X, Y = torch.meshgrid(x, y, indexing="xy")
-    X, Y = X.reshape(-1, 1), Y.reshape(-1, 1)
+    X = X.reshape(-1, 1)
+    Y = Y.reshape(-1, 1)
     Z = torch.cat((X, Y), dim=1)
-    partitions = layer.assign_local_partitions(Z, remove_redundant=True)
 
-    partitions = partitions.detach().numpy()
-    partitions = partitions.reshape(100, 100, -1)
-    boundary = utils.get_class_boundary(partitions)
+    # Assign partitions
+    global_partitions = net.assign_global_partition(Z, remove_redundant=True)
+    num_partitions = global_partitions.shape[1]
+    print(f"Number of partitions: {num_partitions}")
 
-    plt.imshow(boundary, cmap="Greys")
+    # Plot partitions
+    global_partitions = global_partitions.detach().numpy()
+    global_partitions = global_partitions.reshape(100, 100, num_partitions)
+    boundary = utils.get_class_boundary(global_partitions)
+    plt.imshow(boundary, cmap="Greys", extent=[-1, 1, -1, 1])
     plt.show()
+
