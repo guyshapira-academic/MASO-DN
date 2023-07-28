@@ -31,7 +31,7 @@ def train(
     train_loader = tdata.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
     test_loader = tdata.DataLoader(test_dataset, batch_size=batch_size)
 
-    optimizer = optim.SGD(maso_dn.parameters(), lr=lr)
+    optimizer = optim.Adam(maso_dn.parameters(), lr=lr)
 
     for epoch_idx in trange(n_epochs, leave=True, disable=True):
         maso_dn.train()

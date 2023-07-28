@@ -12,7 +12,7 @@ sys.path.append(_root_dir)
 
 import torch
 from torch import Tensor
-from typing import Tuple
+from typing import Tuple, Optional
 
 import matplotlib.pyplot as plt
 
@@ -45,14 +45,17 @@ def get_data(
     return x_train, y_train, x_test, y_test
 
 
-if __name__ == "__main__":
-    # Hyperparameters
-    epochs = 50
-    batch_size = 8
-    lr = 0.01
-
+def run(
+    dataset: str = "moons",
+    n_samples: int = 10000,
+    noise: float = 0.1,
+    lr: float = 0.01,
+    batch_size: int = 32,
+    epochs: int = 100,
+    name: Optional[str] = None,
+) -> None:
     net = maso.fc_network((2, 4, 4, 4, 1))
-    x_train, y_train, x_test, y_test = get_data("circles", 10000, 0.05)
+    x_train, y_train, x_test, y_test = get_data(dataset, n_samples, noise)
 
     # Train the network
     train.train(
@@ -88,9 +91,45 @@ if __name__ == "__main__":
     X = X.reshape(500, 500)
     Y = Y.reshape(500, 500)
     plt.contourf(X, Y, Z, levels=16, cmap="RdBu_r", alpha=0.5)
-    plt.scatter(x_train[:, 0], x_train[:, 1], c=y_train[:, 0], cmap="RdBu_r", marker="x", alpha=0.05)
-    plt.imshow(boundary, extent=[range_x[0], range_x[1], range_y[0], range_y[1]], cmap="Greys", alpha=1)
+    plt.scatter(
+        x_train[:, 0],
+        x_train[:, 1],
+        c=y_train[:, 0],
+        cmap="RdBu_r",
+        marker="x",
+        alpha=0.05,
+    )
+    plt.imshow(
+        boundary,
+        extent=[range_x[0], range_x[1], range_y[0], range_y[1]],
+        cmap="Greys",
+        alpha=1,
+    )
+    if name is not None:
+        plt.savefig(f"{name}.png")
     plt.show()
 
 
+if __name__ == "__main__":
+    epochs = 50
+    batch_size = 16
+    lr = 0.01
 
+    run(
+        "moons",
+        n_samples=10000,
+        noise=0.1,
+        lr=lr,
+        epochs=epochs,
+        batch_size=batch_size,
+        name="moons",
+    )
+    run(
+        "circles",
+        n_samples=10000,
+        noise=0.1,
+        lr=lr,
+        epochs=epochs,
+        batch_size=batch_size,
+        name="circles",
+    )
