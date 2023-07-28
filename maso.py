@@ -152,3 +152,26 @@ class MASOLayer(nn.Module):
         if remove_redundant:
             partitions = partitions[:, partitions.any(dim=0)]
         return partitions
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    import utils
+    # Test the MASOLayer class
+    layer = MASOLayer(
+        linear_operator="fc",
+        linear_operator_kwargs={"in_features": 2, "out_features": 6},
+        activation_function="relu",
+    )
+    x, y = torch.linspace(-1, 1, 100), torch.linspace(-1, 1, 100)
+    X, Y = torch.meshgrid(x, y, indexing="xy")
+    X, Y = X.reshape(-1, 1), Y.reshape(-1, 1)
+    Z = torch.cat((X, Y), dim=1)
+    partitions = layer.assign_local_partitions(Z, remove_redundant=True)
+
+    partitions = partitions.detach().numpy()
+    partitions = partitions.reshape(100, 100, -1)
+    boundary = utils.get_class_boundary(partitions)
+
+    plt.imshow(boundary, cmap="Greys")
+    plt.show()

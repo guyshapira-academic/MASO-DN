@@ -33,9 +33,8 @@ def get_class_boundary(grid: NDArray) -> NDArray:
         np.ndarray or torch.Tensor: Class boundary of the grid.
     """
     grad_axis = tuple(range(len(grid.shape) - 1))
-    grad = np.gradient(grid, axis=grad_axis)
-    print(grad)
+    grad = np.gradient(grid.astype(int), axis=grad_axis)
+    grad = np.concatenate(grad, axis=-1)
     b = grad > 0
-    print(b)
     b = b.any(axis=-1)
     return b
