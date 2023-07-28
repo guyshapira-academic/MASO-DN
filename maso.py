@@ -1,5 +1,6 @@
 from typing import Optional, Dict, Any
 
+import torch
 import torch.nn as nn
 from torch import Tensor
 
@@ -20,7 +21,7 @@ class MASOLayer(nn.Module):
             layer. Can be one of the following:
                 - 'relu': ReLU activation function
                 - 'leaky_relu': Leaky ReLU activation function
-                - 'abs': Absolute value activation function
+                - 'identity': Identity activation function
             Default: 'relu'
         activation_function_kwargs (dict): Keyword arguments to be passed to
             the activation function. Default: {}
@@ -56,8 +57,10 @@ class MASOLayer(nn.Module):
             self.activation_function = nn.LeakyReLU(
                 **activation_function_kwargs
             )
-        elif activation_function == "abs":
-            self.activation_function = nn.ReLU(**activation_function_kwargs)
+        elif activation_function == "identity":
+            self.activation_function = nn.Identity(
+                **activation_function_kwargs
+            )
         else:
             raise ValueError(
                 f"Invalid activation function: {activation_function}. "
@@ -77,3 +80,49 @@ class MASOLayer(nn.Module):
         x = self.linear_operator(x)
         x = self.activation_function(x)
         return x
+
+    @property
+    def partitions_per_dim(self):
+        if type(self.activation_function) in [nn.ReLU, nn.LeakyReLU]:
+            return 2
+        elif type(self.activation_function) == nn.Identity:
+            return 1
+        else:
+            return 0
+
+    @property
+    def num_partitions(self) -> int:
+        """
+        Returns the number of partitions induced by the layer.
+
+        Returns:
+            int: Number of partitions
+        """
+        if isinstance(self.linear_operator, nn.Linear):
+            dim_out = self.linear_operator.out_features
+        else:
+            return 0
+
+        return self.partitions_per_dim ** dim_out
+
+    def get_single_dim_local_partition_descriptor(self, k: int) -> Tensor:
+        """
+        Returns the vector and a constant that define the local partitions for a
+        single dimension.
+
+        Parameters:
+            k (int): Index of the dimension
+
+        Returns:
+            torch.Tensor: Local partition descriptor
+        """
+        if isinstance(self.linear_operator, nn.Linear):
+            A = self.linear_operator.weight
+            b = self.linear_operator.bias
+            return A[k, :], b[k]
+        else:
+            raise ValueError(
+                "The linear operator must be an instance of nn.Linear"
+            )
+
+
