@@ -5,8 +5,6 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-import utils
-
 
 class MASOLayer(nn.Module):
     """
