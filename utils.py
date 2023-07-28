@@ -42,6 +42,16 @@ def get_class_boundary(grid: NDArray) -> NDArray:
 
 
 def conv2d_to_linear(conv_layer, input_shape: Tuple[int, int, int]):
+    """
+    Converts a 2D convolutional layer linear parameters.
+
+    Parameters:
+        conv_layer (nn.Conv2d): 2D convolutional layer
+        input_shape (tuple): Shape of the input to the layer
+
+    Returns:
+        tuple: Linear parameters (A, b)
+    """
     if not isinstance(conv_layer, nn.Conv2d):
         raise ValueError("Input layer must be a nn.Conv2d layer.")
     dummy_input = torch.randn(size=(1, *input_shape))
