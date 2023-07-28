@@ -220,6 +220,32 @@ class MASODN(nn.Sequential):
         return global_partitions
 
 
+def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
+    """
+    Returns a fully connected network with the specified number of features.
+
+    Parameters:
+        n_feature (tuple): Number of features per layer
+
+    Returns:
+        MASODN: Fully connected network
+    """
+    layers = list()
+    for idx in range(len(n_feature) - 1):
+        activation_function = "relu" if idx < len(n_feature) - 2 else "identity"
+        layers.append(
+            MASOLayer(
+                linear_operator="fc",
+                linear_operator_kwargs={
+                    "in_features": n_feature[idx],
+                    "out_features": n_feature[idx + 1],
+                },
+                activation_function=activation_function,
+            )
+        )
+    return MASODN(*layers)
+
+
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import utils
@@ -262,4 +288,3 @@ if __name__ == "__main__":
     boundary = utils.get_class_boundary(global_partitions)
     plt.imshow(boundary, cmap="Greys", extent=[-1, 1, -1, 1])
     plt.show()
-
