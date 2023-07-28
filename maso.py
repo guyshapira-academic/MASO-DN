@@ -46,6 +46,8 @@ class MASOLayer(nn.Module):
         # Initialize linear operator
         if linear_operator == "fc":
             self.linear_operator = nn.Linear(**linear_operator_kwargs)
+        elif linear_operator == "conv":
+            self.linear_operator = nn.Conv2d(**linear_operator_kwargs)
         else:
             raise ValueError(
                 f"Invalid linear operator: {linear_operator}. " "Must be one of: 'fc'"

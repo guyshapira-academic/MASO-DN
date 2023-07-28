@@ -1,9 +1,10 @@
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 
 
@@ -38,3 +39,45 @@ def get_class_boundary(grid: NDArray) -> NDArray:
     b = grad > 0
     b = b.any(axis=-1)
     return b
+
+
+def conv2d_to_linear(conv_layer, input_shape: Tuple[int, int, int]):
+    if not isinstance(conv_layer, nn.Conv2d):
+        raise ValueError("Input layer must be a nn.Conv2d layer.")
+    dummy_input = torch.randn(size=(1, *input_shape))
+    dummy_output = conv_layer(dummy_input)
+
+    output_size = dummy_output.numel()
+    input_size = dummy_input.numel()
+
+    # Create identical layer with no bias
+    in_channels = conv_layer.in_channels
+    out_channels = conv_layer.out_channels
+    kernel_size = conv_layer.kernel_size
+    stride = conv_layer.stride
+    padding = conv_layer.padding
+    dilation = conv_layer.dilation
+    groups = conv_layer.groups
+    new_conv_layer = nn.Conv2d(in_channels=in_channels,
+                               out_channels=out_channels,
+                               kernel_size=kernel_size,
+                               stride=stride,
+                               padding=padding,
+                               dilation=dilation,
+                               groups=groups,
+                               bias=False)  # Setting bias to False removes the bias term
+
+    # Copy the weights from the original layer to the new layer
+    new_conv_layer.weight.data = conv_layer.weight.data.clone()
+
+    I = torch.eye(input_size)
+    I = I.reshape((input_size, *input_shape))
+    A = new_conv_layer(I)
+    A = A.reshape((input_size, output_size))
+
+    x = torch.zeros(size=(1, input_size))
+    x = x.reshape((1, *input_shape))
+    b = conv_layer(x)
+    b = b.reshape((output_size,))
+
+    return A.T, b
