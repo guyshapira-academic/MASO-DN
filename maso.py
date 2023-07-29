@@ -377,6 +377,28 @@ class MASODN(nn.Sequential):
         global_partitions = torch.stack(global_partitions, dim=1)
         return global_partitions
 
+    def assign_local_partitions(
+        self, x: Tensor, remove_redundant: bool = True
+    ) -> Tensor:
+        """
+        Takes a tensor of input values and assigns each input to a local partition
+        for the layer.
+
+        Parameters:
+            x (torch.Tensor): Input tensor
+            remove_redundant (bool): If True, drops partitions with no members.
+
+        Returns:
+            list[Tensor]: List of tensors indicating the local partition
+                assignments for each input
+        """
+        z = x
+        local_partitions = list()
+        for layer in self:
+            local_partitions.append(layer.assign_local_partitions(z))
+            z = layer(z)
+        return local_partitions
+
 
 def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
     """

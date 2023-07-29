@@ -101,10 +101,10 @@ def run(
     x_test = [x[0] for x in test_set]
     x_test = torch.stack(x_test)
 
-    partitions = maso_net.assign_global_partition(x_test, l=1)
-    num_partitions = partitions.shape[1]
-    print(f"Number of partitions: {num_partitions}")
+    partitions = maso_net.assign_local_partitions(x_test)
+    for p in partitions:
+        print(p.shape)
 
 
 if __name__ == "__main__":
-    run()
+    run(dataset="mnist", lr=0.0005, batch_size=50, epochs=15)
