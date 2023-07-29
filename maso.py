@@ -69,7 +69,7 @@ class MASOLayer(nn.Module):
         elif activation_function == "leaky_relu":
             self.activation_function = nn.LeakyReLU(**activation_function_kwargs)
         elif activation_function == "maxpool":
-            self.activation_function = nn.MaxPool2d(kernel_size=(2, 2), **activation_function_kwargs)
+            self.activation_function = nn.MaxPool2d(kernel_size=2, **activation_function_kwargs)
         elif activation_function == "identity":
             self.activation_function = nn.Identity(**activation_function_kwargs)
         else:
@@ -152,6 +152,12 @@ class MASOLayer(nn.Module):
         if isinstance(self.activation_function, nn.MaxPool2d):
             input_ = self.linear_operator(input_)
             input_shape = input_.shape
+            # Make sure the height and width are even
+            if input_shape[2] % 2 != 0:
+                input_ = input_[..., :-1, :]
+            if input_shape[3] % 2 != 0:
+                input_ = input_[..., :-1]
+
             input_ = einops.rearrange(
                 input_,
                 "b c (h p1) (w p2) -> b (c h w) (p1 p2)",
@@ -415,16 +421,3 @@ def largeCNN(input_channels: int) -> MASODN:
         MASOMaxPool2d(),
     ]
     return MASODN(*layers)
-
-
-
-if __name__ == "__main__":
-    x = torch.randn((10, 3, 32, 32))
-    large_net = largeCNN(3)
-    small_net = smallCNN(3)
-
-    y_large = large_net(x)
-    y_small = small_net(x)
-
-    print(y_large.shape)
-    print(y_small.shape)
