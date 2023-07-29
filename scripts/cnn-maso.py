@@ -2,6 +2,7 @@ import sys
 import os
 
 import numpy as np
+from numpy.typing import NDArray
 
 import maso
 
@@ -101,10 +102,32 @@ def run(
     x_test = [x[0] for x in test_set]
     x_test = torch.stack(x_test)
 
-    partitions = maso_net.assign_local_partitions(x_test)
+    partitions = maso_net.layer_local_vq_distance(x_test[:1500, ...])
+
     for p in partitions:
-        print(p.shape)
+        neighbors_idx = nearest_neighbors_from_pdist(p, k=5, n=5)
+        fig, axs = plt.subplots(nrows=5, ncols=6)
+        fig.tight_layout(pad=0.01)
+
+        for i in range(5):
+            axs[i, 0].imshow(x_test[i, ...].permute(1, 2, 0))
+            axs[i, 0].set_axis_off()
+            for j in range(5):
+                axs[i, j + 1].imshow(x_test[neighbors_idx[i, j], ...].permute(1, 2, 0))
+                axs[i, j + 1].set_axis_off()
+
+        plt.show()
+
+
+def nearest_neighbors_from_pdist(distance_matrix: NDArray, k: int = 10, n: int = 10) -> NDArray:
+    """
+    Given a distance matrix, return the indices of the nearest neighbors
+    """
+    neighbors = np.zeros((n, k), dtype=np.int32)
+    for i in range(n):
+        neighbors[i, :] = np.argsort(distance_matrix[i, :])[1:k+1]
+    return neighbors
 
 
 if __name__ == "__main__":
-    run(dataset="cifar10", lr=0.0005, batch_size=50, epochs=15)
+    run(dataset="cifar10", lr=0.0005, batch_size=100, epochs=20, model="smallCNN",)

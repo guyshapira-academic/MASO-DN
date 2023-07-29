@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, List
 from itertools import product
 
 import numpy as np
@@ -9,6 +9,7 @@ from torch import Tensor
 from tqdm import tqdm, trange
 
 import einops
+from scipy.spatial.distance import squareform
 
 import utils
 
@@ -128,7 +129,10 @@ class MASOLayer(nn.Module):
         """
         if isinstance(self.activation_function, nn.MaxPool2d):
             x = self.linear_operator(x)
-
+            if x.shape[2] % 2 != 0:
+                x = x[:, :, :-1, :]
+            if x.shape[3] % 2 != 0:
+                x = x[:, :, :, :-1]
             x = einops.rearrange(
                 x,
                 "b c (h p1) (w p2) -> b (c h w) (p1 p2)",
@@ -159,7 +163,6 @@ class MASOLayer(nn.Module):
             n = x.shape[1]
             d = nn.functional.pdist(x, p=2) / np.sqrt(n)
             return d
-
 
     def get_local_partitions_descriptor(
         self,
@@ -444,6 +447,23 @@ class MASODN(nn.Sequential):
             z = layer(z)
         return local_partitions
 
+    def layer_local_vq_distance(self, x: Tensor) -> List[Tensor]:
+        """
+        For each layer, calculates the pairwise VQ distance matrix.
+
+        Parameters:
+            x (torch.Tensor): Input tensor
+        """
+        z = x
+        local_vq_distances = list()
+        for layer in self:
+            d = layer.vq_pdist(z)
+            d = d.detach().numpy()
+            d = squareform(d)
+            local_vq_distances.append(d)
+            z = layer(z)
+        return local_vq_distances
+
 
 def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
     """
@@ -507,41 +527,15 @@ def largeCNN(input_channels: int) -> MASODN:
 
 if __name__ == "__main__":
     import matplotlib.pyplot as plt
-    from scipy.spatial.distance import squareform
+    from sklearn.datasets import load_digits
+    from scipy import interpolate
 
-    # Test the network
-    maso_linear = MASOLayer(
-        linear_operator="fc",
-        linear_operator_kwargs={"in_features": 2, "out_features": 64},
-        activation_function="relu",
-    )
-    x = torch.randn((10, 2))
-    m = maso_linear.vq_pdist(x)
-    m = squareform(m.detach().numpy())
-    plt.matshow(m)
-    plt.show()
+    x, y = load_digits(return_X_y=True)
 
-    maso_conv = MASOLayer(
-        linear_operator="conv",
-        linear_operator_kwargs={
-            "in_channels": 1,
-            "out_channels": 32,
-            "kernel_size": 3,
-            "padding": 0,
-        },
-        activation_function="relu",
-    )
-    x = torch.randn((10, 1, 28, 28))
-    m = maso_conv.vq_pdist(x)
+    net = fc_network(n_feature=(64, 16))
+    x = torch.from_numpy(x).float() / 255.0
 
-    m = squareform(m.detach().numpy())
-    plt.matshow(m)
-    plt.show()
-
-    maso_pool = MASOMaxPool2d()
-    x = torch.randn((10, 32, 26, 26))
-    m = maso_pool.vq_pdist(x)
-    m = squareform(m.detach().numpy())
-    plt.matshow(m)
-    plt.show()
-
+    partitions = net.layer_local_vq_distance(x)
+    for p in partitions:
+        plt.matshow(p)
+        plt.show()
