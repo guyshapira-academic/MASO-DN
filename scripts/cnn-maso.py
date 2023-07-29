@@ -107,4 +107,4 @@ def run(
 
 
 if __name__ == "__main__":
-    run(dataset="mnist", lr=0.0005, batch_size=50, epochs=15)
+    run(dataset="cifar10", lr=0.0005, batch_size=50, epochs=15)

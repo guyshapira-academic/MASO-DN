@@ -116,6 +116,51 @@ class MASOLayer(nn.Module):
 
         return self.partitions_per_dim**dim_out
 
+    def vq_pdist(self, x: Tensor) -> Tensor:
+        """
+        Returns the number of shared partitions between two tensors.
+
+        Parameters:
+            x (torch.Tensor): First tensor
+
+        Returns:
+            torch.Tensor: Number of shared partitions
+        """
+        if isinstance(self.activation_function, nn.MaxPool2d):
+            x = self.linear_operator(x)
+
+            x = einops.rearrange(
+                x,
+                "b c (h p1) (w p2) -> b (c h w) (p1 p2)",
+                p1=self.activation_function.kernel_size,
+                p2=self.activation_function.kernel_size,
+            )
+
+            x = torch.argmax(x, dim=-1)
+
+            x = nn.functional.one_hot(x, 4)
+
+            x = einops.rearrange(x, "b a d -> b (a d)").to(torch.float)
+            n = x.shape[1]
+            d = nn.functional.pdist(x, p=2) / np.sqrt(n)
+            return d
+
+        elif isinstance(self.linear_operator, nn.Linear):
+            x = self.linear_operator(x) > 0
+            x = torch.concatenate([x, torch.logical_not(x)], dim=1)
+            x = x.to(torch.int).to(torch.float)
+            n = x.shape[1]
+            d = nn.functional.pdist(x, p=2) / np.sqrt(n)
+            return d
+        elif isinstance(self.linear_operator, nn.Conv2d):
+            n = x.shape[0]
+            x = self.linear_operator(x) > 0
+            x = x.reshape(n, -1).to(torch.float)
+            n = x.shape[1]
+            d = nn.functional.pdist(x, p=2) / np.sqrt(n)
+            return d
+
+
     def get_local_partitions_descriptor(
         self,
         input_shape: Optional[Tuple[int, int, int]] = None,
@@ -458,3 +503,45 @@ def largeCNN(input_channels: int) -> MASODN:
         MASOMaxPool2d(),
     ]
     return MASODN(*layers)
+
+
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    from scipy.spatial.distance import squareform
+
+    # Test the network
+    maso_linear = MASOLayer(
+        linear_operator="fc",
+        linear_operator_kwargs={"in_features": 2, "out_features": 64},
+        activation_function="relu",
+    )
+    x = torch.randn((10, 2))
+    m = maso_linear.vq_pdist(x)
+    m = squareform(m.detach().numpy())
+    plt.matshow(m)
+    plt.show()
+
+    maso_conv = MASOLayer(
+        linear_operator="conv",
+        linear_operator_kwargs={
+            "in_channels": 1,
+            "out_channels": 32,
+            "kernel_size": 3,
+            "padding": 0,
+        },
+        activation_function="relu",
+    )
+    x = torch.randn((10, 1, 28, 28))
+    m = maso_conv.vq_pdist(x)
+
+    m = squareform(m.detach().numpy())
+    plt.matshow(m)
+    plt.show()
+
+    maso_pool = MASOMaxPool2d()
+    x = torch.randn((10, 32, 26, 26))
+    m = maso_pool.vq_pdist(x)
+    m = squareform(m.detach().numpy())
+    plt.matshow(m)
+    plt.show()
+
