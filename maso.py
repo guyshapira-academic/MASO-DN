@@ -1,6 +1,7 @@
 from typing import Optional, Dict, Any, Tuple
 from itertools import product
 
+import numpy as np
 import torch
 import torch.nn as nn
 from torch import Tensor
@@ -130,7 +131,7 @@ class MASOLayer(nn.Module):
         else:
             raise ValueError("The linear operator must be an instance of nn.Linear")
 
-    def assign_local_partitions(self, x: Tensor, remove_redundant: bool) -> Tensor:
+    def assign_local_partitions(self, x: Tensor, remove_redundant: bool = True) -> Tensor:
         """
         Takes a tensor of input values and assigns each value to a local
         partition.
@@ -149,23 +150,33 @@ class MASOLayer(nn.Module):
             x = x.reshape(x.shape[0], -1)
         A, b = self.get_local_partitions_descriptor(input_shape=input_shape_[1:])
         z = x @ A.T + b
-        partitions = list()
-        element_sum = torch.zeros(size=(z.shape[0],))
-        for comb in tqdm(product([0, 1], repeat=z.shape[1]), total=2**z.shape[1]):
-            r = torch.ones(size=(z.shape[0],))
-            for column in range(z.shape[1]):
-                col = z[:, column] > 0
-                if not comb[column]:
-                    col = torch.logical_not(col)
-                r = torch.logical_and(r, col)
-            partitions.append(r)
-            element_sum += r
-            if element_sum.all():
-                break
-        partitions = torch.stack(partitions, dim=1)
         if remove_redundant:
-            partitions = partitions[:, partitions.any(dim=0)]
-        return partitions
+            # Convert each row from binary to decimal
+            print(z)
+            z_bool = (z > 0).to(torch.int)
+            z_integers = utils.bin_to_dec(z_bool.detach().numpy())
+            unique, partition_idx = np.unique(z_integers, return_inverse=True)
+            n_partitions = len(unique)
+            partitions = torch.zeros(size=(z.shape[0], n_partitions), dtype=torch.bool)
+            for i in range(z.shape[0]):
+                partitions[i, partition_idx[i]] = True
+            return partitions
+        else:
+            partitions = list()
+            element_sum = torch.zeros(size=(z.shape[0],))
+            for comb in tqdm(utils.iter_combinations(z.shape[1])):
+                r = torch.ones(size=(z.shape[0],))
+                for column in range(z.shape[1]):
+                    col = z[:, column] > 0
+                    if not comb[column]:
+                        col = torch.logical_not(col)
+                    r = torch.logical_and(r, col)
+                partitions.append(r)
+                element_sum += r
+                if element_sum.all():
+                    break
+            partitions = torch.stack(partitions, dim=1)
+            return partitions
 
 
 class MASODN(nn.Sequential):

@@ -1,7 +1,8 @@
 from typing import List, Union, Tuple
+import itertools
 
 import numpy as np
-from numpy.typing import NDArray
+from numpy.typing import NDArray, ArrayLike
 
 import torch
 import torch.nn as nn
@@ -20,6 +21,23 @@ def dec_to_bin(dec: int) -> List[int]:
         bin_list.append(dec % 2)
         dec = dec // 2
     return bin_list[::-1]
+
+
+def bin_to_dec(bin_tensor: NDArray) -> NDArray:
+    """
+    Converts from binary list to decimal int.
+
+    Parameters:
+        bin_tensor (np.ndarray or torch.Tensor): Binary list to be converted.
+    """
+    idx = np.arange(bin_tensor.shape[-1])
+    idx = 2 ** idx
+    idx = idx[::-1]
+
+    idx = idx.reshape((-1, 1))
+
+    dec = bin_tensor @ idx
+    return dec
 
 
 def get_class_boundary(grid: NDArray) -> NDArray:
@@ -91,3 +109,20 @@ def conv2d_to_linear(conv_layer, input_shape: Tuple[int, int, int]):
     b = b.reshape((output_size,))
 
     return A.T, b
+
+
+def count_ones(comb):
+    # Helper function to count the number of ones in a combination
+    return sum(1 for elem in comb if elem == 1)
+
+
+def custom_sort(comb):
+    # Sorting function based on the count of ones in each combination
+    return count_ones(comb)
+
+
+def iter_combinations(r):
+    # Generate all combinations of 0's and 1's of length 'r'
+    combinations = list(itertools.product([0, 1], repeat=r))
+    combinations.sort(key=custom_sort)
+    return combinations
