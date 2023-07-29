@@ -59,7 +59,8 @@ class MASOLayer(nn.Module):
             self.linear_operator = nn.Identity(**linear_operator_kwargs)
         else:
             raise ValueError(
-                f"Invalid linear operator: {linear_operator}. " "Must be one of: 'fc'"
+                f"Invalid linear operator: {linear_operator}. " "Must be one of: "
+                "'fc', 'conv', 'identity'"
             )
 
         # Initialize activation function
@@ -68,13 +69,13 @@ class MASOLayer(nn.Module):
         elif activation_function == "leaky_relu":
             self.activation_function = nn.LeakyReLU(**activation_function_kwargs)
         elif activation_function == "maxpool":
-            self.activation_function = nn.MaxPool2d(**activation_function_kwargs)
+            self.activation_function = nn.MaxPool2d(kernel_size=(2, 2), **activation_function_kwargs)
         elif activation_function == "identity":
             self.activation_function = nn.Identity(**activation_function_kwargs)
         else:
             raise ValueError(
                 f"Invalid activation function: {activation_function}. "
-                "Must be one of: 'relu', 'leaky_relu', 'abs'"
+                "Must be one of: 'relu', 'leaky_relu', 'abs', 'maxpool'"
             )
 
     def forward(self, x: Tensor) -> Tensor:
@@ -220,6 +221,72 @@ class MASOLayer(nn.Module):
             return partitions
 
 
+class MASOLinear(MASOLayer):
+    """
+    This class defines a fully connected MASO layer.
+
+    Parameters:
+        in_features (int): Number of input features
+        out_features (int): Number of output features
+        activation_function (str): Name of the activation function
+    """
+
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        activation_function: str = "relu",
+    ) -> None:
+        operator_kwargs = {"in_features": in_features, "out_features": out_features}
+        super().__init__("fc", operator_kwargs, activation_function)
+
+
+class MASOConv2d(MASOLayer):
+    """
+    This class defines a convolutional MASO layer.
+
+    Parameters:
+        in_channels (int): Number of input channels
+        out_channels (int): Number of output channels
+        kernel_size (int): Size of the kernel
+        stride (int): Stride of the convolution
+        padding (int): Padding of the convolution
+        activation_function (str): Name of the activation function
+    """
+
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: int,
+        stride: int = 1,
+        padding: int = 0,
+        activation_function: str = "relu",
+    ) -> None:
+        operator_kwargs = {
+            "in_channels": in_channels,
+            "out_channels": out_channels,
+            "kernel_size": kernel_size,
+            "stride": stride,
+            "padding": padding,
+        }
+        super().__init__("conv", operator_kwargs, activation_function)
+
+
+class MASOMaxPool2d(MASOLayer):
+    """
+    This class defines a max pooling MASO layer.
+
+    Parameters:
+        kernel_size (int): Size of the kernel
+        stride (int): Stride of the convolution
+        padding (int): Padding of the convolution
+    """
+
+    def __init__(self) -> None:
+        super().__init__("identity", activation_function="maxpool")
+
+
 class MASODN(nn.Sequential):
     """
     This class is an abstraction of a basic MASO deep network, which consists
@@ -316,12 +383,48 @@ def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
     return MASODN(*layers)
 
 
+def smallCNN(input_channels: int) -> MASODN:
+    """
+    Implements a small CNN.
+    """
+    layers = [
+        MASOConv2d(input_channels, 32, 3, padding=0, activation_function="relu"),
+        MASOMaxPool2d(),
+        MASOConv2d(32, 64, 3, padding=0, activation_function="relu"),
+        MASOMaxPool2d(),
+        MASOConv2d(64, 128, 1, padding=0, activation_function="relu"),
+    ]
+    return MASODN(*layers)
+
+
+def largeCNN(input_channels: int) -> MASODN:
+    """
+    Implements a large CNN.
+    """
+    layers = [
+        MASOConv2d(input_channels, 96, 3, padding=0, activation_function="relu"),
+        MASOConv2d(96, 96, 3, padding=1, activation_function="relu"),
+        MASOConv2d(96, 96, 3, padding=1, activation_function="relu"),
+        MASOMaxPool2d(),
+        MASOConv2d(96, 192, 3, padding=0, activation_function="relu"),
+        MASOConv2d(192, 192, 3, padding=1, activation_function="relu"),
+        MASOConv2d(192, 192, 3, padding=0, activation_function="relu"),
+        MASOMaxPool2d(),
+        MASOConv2d(192, 192, 3, padding=0, activation_function="relu"),
+        MASOConv2d(192, 192, 1, padding=0, activation_function="relu"),
+        MASOMaxPool2d(),
+    ]
+    return MASODN(*layers)
+
+
+
 if __name__ == "__main__":
-    maso_pool = MASOLayer(
-        linear_operator="identity",
-        activation_function="maxpool",
-        activation_function_kwargs={"kernel_size": 2},
-    )
-    x = torch.randn(size=(1000, 1, 32, 32))
-    print(maso_pool(x))
-    print(maso_pool.assign_local_partitions(x))
+    x = torch.randn((10, 3, 32, 32))
+    large_net = largeCNN(3)
+    small_net = smallCNN(3)
+
+    y_large = large_net(x)
+    y_small = small_net(x)
+
+    print(y_large.shape)
+    print(y_small.shape)
