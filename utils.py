@@ -31,7 +31,7 @@ def bin_to_dec(bin_tensor: NDArray) -> NDArray:
         bin_tensor (np.ndarray or torch.Tensor): Binary list to be converted.
     """
     idx = np.arange(bin_tensor.shape[-1])
-    idx = 2 ** idx
+    idx = 2**idx
     idx = idx[::-1]
 
     idx = idx.reshape((-1, 1))
@@ -86,14 +86,16 @@ def conv2d_to_linear(conv_layer, input_shape: Tuple[int, int, int]):
     padding = conv_layer.padding
     dilation = conv_layer.dilation
     groups = conv_layer.groups
-    new_conv_layer = nn.Conv2d(in_channels=in_channels,
-                               out_channels=out_channels,
-                               kernel_size=kernel_size,
-                               stride=stride,
-                               padding=padding,
-                               dilation=dilation,
-                               groups=groups,
-                               bias=False)  # Setting bias to False removes the bias term
+    new_conv_layer = nn.Conv2d(
+        in_channels=in_channels,
+        out_channels=out_channels,
+        kernel_size=kernel_size,
+        stride=stride,
+        padding=padding,
+        dilation=dilation,
+        groups=groups,
+        bias=False,
+    )  # Setting bias to False removes the bias term
 
     # Copy the weights from the original layer to the new layer
     new_conv_layer.weight.data = conv_layer.weight.data.clone()

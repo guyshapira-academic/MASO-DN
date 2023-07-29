@@ -8,6 +8,8 @@ from torch import Tensor
 
 from tqdm import tqdm
 
+import einops
+
 import utils
 
 
@@ -53,6 +55,8 @@ class MASOLayer(nn.Module):
             self.linear_operator = nn.Linear(**linear_operator_kwargs)
         elif linear_operator == "conv":
             self.linear_operator = nn.Conv2d(**linear_operator_kwargs)
+        elif linear_operator == "identity":
+            self.linear_operator = nn.Identity(**linear_operator_kwargs)
         else:
             raise ValueError(
                 f"Invalid linear operator: {linear_operator}. " "Must be one of: 'fc'"
@@ -63,6 +67,8 @@ class MASOLayer(nn.Module):
             self.activation_function = nn.ReLU(**activation_function_kwargs)
         elif activation_function == "leaky_relu":
             self.activation_function = nn.LeakyReLU(**activation_function_kwargs)
+        elif activation_function == "maxpool":
+            self.activation_function = nn.MaxPool2d(**activation_function_kwargs)
         elif activation_function == "identity":
             self.activation_function = nn.Identity(**activation_function_kwargs)
         else:
@@ -109,14 +115,24 @@ class MASOLayer(nn.Module):
 
         return self.partitions_per_dim**dim_out
 
-    def get_local_partitions_descriptor(self, input_shape: Optional[Tuple[int, int, int]] = None) -> Tensor:
+    def get_local_partitions_descriptor(
+        self,
+        input_shape: Optional[Tuple[int, int, int]] = None,
+        input_: Optional[Tensor] = None,
+    ) -> Tensor:
         """
-        Returns the affine parameters that define the local partitions.
+        Returns a tensor that describes the local partitions induced by the
+        layer. When the activation function is a ReLU or LeakyReLU, the
+        partitions are described by the affine parameters of the linear operator.
+        When the activation function is a max pooling layer, the partitions are
+        described by the partition assignment itself (since it is input dependent)
 
         Parameters:
             k (int): Index of the dimension
             input_shape (tuple): Shape of the input tensor to the layer
                 required only if the linear operator is a convolutional layer.
+            input_ (torch.Tensor): Input tensor to the layer required only if
+                the activation is a max pooling layer.
 
         Returns:
             torch.Tensor: Local partition descriptor
@@ -124,14 +140,38 @@ class MASOLayer(nn.Module):
         if isinstance(self.linear_operator, nn.Linear):
             A = self.linear_operator.weight
             b = self.linear_operator.bias
-            return A, b
         elif isinstance(self.linear_operator, nn.Conv2d):
             A, b = utils.conv2d_to_linear(self.linear_operator, input_shape)
-            return A, b
+        elif isinstance(self.linear_operator, nn.Identity):
+            A = torch.eye(input_.shape[-1])
+            b = torch.zeros(input_.shape[-1])
         else:
             raise ValueError("The linear operator must be an instance of nn.Linear")
 
-    def assign_local_partitions(self, x: Tensor, remove_redundant: bool = True) -> Tensor:
+        if isinstance(self.activation_function, nn.MaxPool2d):
+            input_ = self.linear_operator(input_)
+            input_shape = input_.shape
+            input_ = einops.rearrange(
+                input_,
+                "b c (h p1) (w p2) -> b (c h w) (p1 p2)",
+                p1=self.activation_function.kernel_size,
+                p2=self.activation_function.kernel_size,
+            )
+            h = input_shape[2]//self.activation_function.kernel_size
+            w = input_shape[3]//self.activation_function.kernel_size
+            input_argmax = input_.argmax(dim=-1)
+            unique, partition_idx = input_argmax.unique(dim=0, return_inverse=True)
+
+            n_partitions = unique.shape[0]
+            partitions = torch.zeros((input_.shape[0], n_partitions))
+            partitions[torch.arange(input_.shape[0]), partition_idx] = 1
+            return partitions.to(torch.bool)
+
+        return A, b
+
+    def assign_local_partitions(
+        self, x: Tensor, remove_redundant: bool = True
+    ) -> Tensor:
         """
         Takes a tensor of input values and assigns each value to a local
         partition.
@@ -148,11 +188,12 @@ class MASOLayer(nn.Module):
             return torch.ones(size=(x.shape[0], 1), dtype=torch.bool)
         if isinstance(self.linear_operator, nn.Conv2d):
             x = x.reshape(x.shape[0], -1)
-        A, b = self.get_local_partitions_descriptor(input_shape=input_shape_[1:])
+        if isinstance(self.activation_function, nn.MaxPool2d):
+            return self.get_local_partitions_descriptor(input_shape=input_shape_[1:], input_=x)
+        A, b = self.get_local_partitions_descriptor(input_shape=input_shape_[1:], input_=x)
         z = x @ A.T + b
         if remove_redundant:
             # Convert each row from binary to decimal
-            print(z)
             z_bool = (z > 0).to(torch.int)
             z_integers = utils.bin_to_dec(z_bool.detach().numpy())
             unique, partition_idx = np.unique(z_integers, return_inverse=True)
@@ -276,19 +317,11 @@ def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
 
 
 if __name__ == "__main__":
-    maso_conv = MASOLayer(
-        linear_operator="conv",
-        linear_operator_kwargs={
-            "in_channels": 1,
-            "out_channels": 2,
-            "kernel_size": 3,
-            "stride": 1,
-            "padding": 0,
-        },
-        activation_function="relu",
+    maso_pool = MASOLayer(
+        linear_operator="identity",
+        activation_function="maxpool",
+        activation_function_kwargs={"kernel_size": 2},
     )
-    x = torch.randn(7, 1, 5, 5)
-    y = maso_conv(x)
-    print(y.shape)
-    # print(maso_conv.num_partitions)
-    print(maso_conv.assign_local_partitions(x, remove_redundant=True))
+    x = torch.randn(size=(1000, 1, 32, 32))
+    print(maso_pool(x))
+    print(maso_pool.assign_local_partitions(x))
