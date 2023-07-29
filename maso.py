@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 import einops
 
@@ -343,11 +343,26 @@ class MASODN(nn.Sequential):
         # For each layer, get the partition assignments for the output of the
         # previous layer, and update the list of partitions by taking the
         # intersection of the previous partitions and the new partitions.
-        for idx in range(l):
+        for idx in trange(l):
+
             layer = self[idx]
             local_partitions = layer.assign_local_partitions(
                 z, remove_redundant=remove_redundant
             )
+            if remove_redundant:
+                global_partitions = torch.stack(global_partitions, dim=1)
+                p = torch.concatenate([global_partitions, local_partitions], dim=1)
+
+                # Convert each row from binary to decimal
+                p = utils.bin_to_dec(p.detach().numpy())
+                unique, partition_idx = np.unique(p, return_inverse=True)
+                n_partitions = len(unique)
+                partitions = torch.zeros(size=(z.shape[0], n_partitions), dtype=torch.bool)
+                for i in range(z.shape[0]):
+                    partitions[i, partition_idx[i]] = True
+
+                global_partitions = [partitions[:, i] for i in range(n_partitions)]
+
             new_global_partitions = list()
             for i, j in product(
                 range(local_partitions.shape[1]), range(len(global_partitions))

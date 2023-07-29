@@ -11,6 +11,7 @@ _root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(_root_dir)
 
 import torch
+import torch.nn as nn
 from torch import Tensor
 from typing import Tuple, Optional
 
@@ -62,7 +63,11 @@ def run(
     epochs: int = 100,
     name: Optional[str] = None,
 ) -> None:
-    net = maso.fc_network((2, 8, 8, 8, 1))
+    net = maso.fc_network((2, 8, 8, 4, 1))
+    net = nn.Sequential(
+        net,
+        nn.Sigmoid(),
+    )
     x_train, y_train, x_test, y_test = get_data(dataset, n_samples, noise)
 
     # Train the network
@@ -75,6 +80,7 @@ def run(
         n_epochs=epochs,
         batch_size=batch_size,
         lr=lr,
+        num_classes=2,
     )
 
     # Extract partitioning
@@ -120,8 +126,8 @@ def run(
 
 if __name__ == "__main__":
     epochs = 50
-    batch_size = 16
-    lr = 0.01
+    batch_size = 8
+    lr = 0.1
 
     run(
         "moons",

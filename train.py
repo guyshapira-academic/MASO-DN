@@ -16,22 +16,33 @@ import maso
 
 def train(
     maso_dn: maso.MASODN,
-    x_train,
-    y_train,
-    x_test,
-    y_test,
+    x_train=None,
+    y_train=None,
+    x_test=None,
+    y_test=None,
+    train_set=None,
+    val_set=None,
     batch_size: int = 32,
     n_epochs: int = 100,
     lr: float = 0.01,
+    num_classes: int = 2,
     pbar: bool = False,
 ) -> None:
-    train_dataset = tdata.TensorDataset(x_train, y_train)
-    test_dataset = tdata.TensorDataset(x_test, y_test)
+    if train_set is None:
+        train_dataset = tdata.TensorDataset(x_train, y_train)
+    else:
+        train_dataset = train_set
+    if val_set is None:
+        test_dataset = tdata.TensorDataset(x_test, y_test)
+    else:
+        test_dataset = val_set
 
     train_loader = tdata.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
     test_loader = tdata.DataLoader(test_dataset, batch_size=batch_size)
 
     optimizer = optim.Adam(maso_dn.parameters(), lr=lr)
+
+    loss_fn = nn.functional.cross_entropy if num_classes > 2 else nn.functional.binary_cross_entropy
 
     for epoch_idx in trange(n_epochs, leave=True, disable=True):
         maso_dn.train()
@@ -39,8 +50,8 @@ def train(
         for batch in it:
             x, y = batch
             y_hat = maso_dn(x)
-            y_hat = torch.sigmoid(y_hat)
-            loss = nn.functional.binary_cross_entropy(y_hat, y)
+            #y_hat = torch.sigmoid(y_hat)
+            loss = loss_fn(y_hat, y)
 
             optimizer.zero_grad()
             loss.backward()
@@ -55,7 +66,10 @@ def train(
             for batch in test_loader:
                 x, y = batch
                 y_hat = maso_dn(x)
-                y_hat = y_hat > 0
+                if num_classes > 2:
+                    y_hat = torch.argmax(y_hat, dim=1)
+                else:
+                    y_hat = y_hat > 0
 
                 accuracy = torch.mean((y_hat == y).to(torch.float))
                 accuracy = accuracy.item()
