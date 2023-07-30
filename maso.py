@@ -188,7 +188,11 @@ class MASOLayer(nn.Module):
         """
         if isinstance(self.linear_operator, nn.Linear):
             A = self.linear_operator.weight
-            b = self.linear_operator.bias
+
+            if self.linear_operator.bias is not None:
+                b = self.linear_operator.bias
+            else:
+                b = torch.zeros(A.shape[0])
         elif isinstance(self.linear_operator, nn.Conv2d):
             A, b = utils.conv2d_to_linear(self.linear_operator, input_shape)
         elif isinstance(self.linear_operator, nn.Identity):
@@ -290,8 +294,13 @@ class MASOLinear(MASOLayer):
         in_features: int,
         out_features: int,
         activation_function: str = "relu",
+        bias: bool = True,
     ) -> None:
-        operator_kwargs = {"in_features": in_features, "out_features": out_features}
+        operator_kwargs = {
+            "in_features": in_features,
+            "out_features": out_features,
+            "bias": bias
+        }
         super().__init__("fc", operator_kwargs, activation_function)
 
 
@@ -316,6 +325,7 @@ class MASOConv2d(MASOLayer):
         stride: int = 1,
         padding: int = 0,
         activation_function: str = "relu",
+        bias: bool = True,
     ) -> None:
         operator_kwargs = {
             "in_channels": in_channels,
@@ -323,6 +333,7 @@ class MASOConv2d(MASOLayer):
             "kernel_size": kernel_size,
             "stride": stride,
             "padding": padding,
+            "bias": bias,
         }
         super().__init__("conv", operator_kwargs, activation_function)
 
@@ -498,35 +509,35 @@ def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
     return MASODN(*layers)
 
 
-def smallCNN(input_channels: int) -> MASODN:
+def smallCNN(input_channels: int, bias: bool = True) -> MASODN:
     """
     Implements a small CNN.
     """
     layers = [
-        MASOConv2d(input_channels, 32, 3, padding=0, activation_function="relu"),
+        MASOConv2d(input_channels, 32, 3, padding=0, activation_function="relu", bias=bias),
         MASOMaxPool2d(),
-        MASOConv2d(32, 64, 3, padding=0, activation_function="relu"),
+        MASOConv2d(32, 64, 3, padding=0, activation_function="relu", bias=bias),
         MASOMaxPool2d(),
-        MASOConv2d(64, 128, 1, padding=0, activation_function="relu"),
+        MASOConv2d(64, 128, 1, padding=0, activation_function="relu", bias=bias),
     ]
     return MASODN(*layers)
 
 
-def largeCNN(input_channels: int) -> MASODN:
+def largeCNN(input_channels: int, bias: bool = True) -> MASODN:
     """
     Implements a large CNN.
     """
     layers = [
-        MASOConv2d(input_channels, 96, 3, padding=0, activation_function="relu"),
-        MASOConv2d(96, 96, 3, padding=1, activation_function="relu"),
-        MASOConv2d(96, 96, 3, padding=1, activation_function="relu"),
+        MASOConv2d(input_channels, 96, 3, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(96, 96, 3, padding=1, activation_function="relu", bias=bias),
+        MASOConv2d(96, 96, 3, padding=1, activation_function="relu", bias=bias),
         MASOMaxPool2d(),
-        MASOConv2d(96, 192, 3, padding=0, activation_function="relu"),
-        MASOConv2d(192, 192, 3, padding=1, activation_function="relu"),
-        MASOConv2d(192, 192, 3, padding=0, activation_function="relu"),
+        MASOConv2d(96, 192, 3, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(192, 192, 3, padding=1, activation_function="relu", bias=bias),
+        MASOConv2d(192, 192, 3, padding=0, activation_function="relu", bias=bias),
         MASOMaxPool2d(),
-        MASOConv2d(192, 192, 3, padding=0, activation_function="relu"),
-        MASOConv2d(192, 192, 1, padding=0, activation_function="relu"),
+        MASOConv2d(192, 192, 3, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(192, 192, 1, padding=0, activation_function="relu", bias=bias),
         MASOMaxPool2d(),
     ]
     return MASODN(*layers)

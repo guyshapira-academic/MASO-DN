@@ -61,6 +61,7 @@ def run(
     lr: float = 0.01,
     batch_size: int = 32,
     epochs: int = 1,
+    bias: bool = True,
 ) -> None:
     if dataset == "mnist":
         train_set, val_set, test_set = get_data("mnist")
@@ -72,9 +73,9 @@ def run(
         raise ValueError(f"No such dataset: {dataset}")
 
     if model == "smallCNN":
-        net = maso.smallCNN(input_channels)
+        net = maso.smallCNN(input_channels, bias=bias)
     elif model == "largeCNN":
-        net = maso.largeCNN(input_channels)
+        net = maso.largeCNN(input_channels, bias=bias)
     else:
         raise ValueError(f"No such model: {model}")
     net = nn.Sequential(net, nn.Flatten(), nn.LazyLinear(10))
@@ -130,4 +131,4 @@ def nearest_neighbors_from_pdist(distance_matrix: NDArray, k: int = 10, n: int =
 
 
 if __name__ == "__main__":
-    run(dataset="cifar10", lr=0.0005, batch_size=50, epochs=30, model="smallCNN",)
+    run(dataset="cifar10", lr=0.0005, batch_size=128, epochs=10, model="smallCNN", bias=False)
