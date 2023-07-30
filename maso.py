@@ -447,16 +447,23 @@ class MASODN(nn.Sequential):
             z = layer(z)
         return local_partitions
 
-    def layer_local_vq_distance(self, x: Tensor) -> List[Tensor]:
+    def layer_local_vq_distance(self, x: Tensor, max_layer: Optional[int] = None) -> List[Tensor]:
         """
         For each layer, calculates the pairwise VQ distance matrix.
 
         Parameters:
             x (torch.Tensor): Input tensor
+            max_layer (int): Index of the last layer to use. If None, all layers
+                are used.
         """
         z = x
+
+        if max_layer is None:
+            max_layer = len(self) - 1
+
         local_vq_distances = list()
-        for layer in self:
+        for idx in range(max_layer + 1):
+            layer = self[idx]
             d = layer.vq_pdist(z)
             d = d.detach().numpy()
             d = squareform(d)

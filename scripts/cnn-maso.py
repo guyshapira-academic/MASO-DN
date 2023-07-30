@@ -130,4 +130,4 @@ def nearest_neighbors_from_pdist(distance_matrix: NDArray, k: int = 10, n: int =
 
 
 if __name__ == "__main__":
-    run(dataset="cifar10", lr=0.0005, batch_size=100, epochs=20, model="smallCNN",)
+    run(dataset="cifar10", lr=0.0005, batch_size=50, epochs=30, model="smallCNN",)
