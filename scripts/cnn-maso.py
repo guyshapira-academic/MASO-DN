@@ -168,18 +168,6 @@ def show_images(images, num_images, k, distance_matrix, indices=None):
     plt.show()
 
 
-def nearest_neighbors_from_pdist(
-    distance_matrix: NDArray, k: int = 10, n: int = 10
-) -> NDArray:
-    """
-    Given a distance matrix, return the indices of the nearest neighbors
-    """
-    neighbors = np.zeros((n, k), dtype=np.int32)
-    for i in range(n):
-        neighbors[i, :] = np.argsort(distance_matrix[i, :])[1 : k + 1]
-    return neighbors
-
-
 if __name__ == "__main__":
     run(
         dataset="cifar10",

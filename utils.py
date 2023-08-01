@@ -130,7 +130,27 @@ def iter_combinations(r):
     return combinations
 
 
-def semantic_metric(neighbors_idx: NDArray, classes: NDArray) -> NDArray:
+def nearest_neighbors_from_pdist(
+    distance_matrix: NDArray, k: int = 10
+) -> NDArray:
+    """
+    Given a distance matrix, return the indices of the nearest neighbors
+
+    Parameters:
+        distance_matrix (np.ndarray or torch.Tensor): Distance matrix.
+        k (int): Number of neighbors to return.
+    """
+    if isinstance(distance_matrix, torch.Tensor):
+        distance_matrix = distance_matrix.cpu().numpy()
+
+    n = distance_matrix.shape[0]
+    neighbors_idx = np.zeros((n, k), dtype=int)
+    for i in range(n):
+        neighbors_idx[i] = np.argsort(distance_matrix[i])[1: k + 1]
+    return neighbors_idx
+
+
+def semantic_metric_calc(neighbors_idx: NDArray, classes: NDArray) -> NDArray:
     """
     Given a set of images and the indices of the neighbors, computes the percentage
     of neighbors of each image that belong to its class.
@@ -155,3 +175,20 @@ def semantic_metric(neighbors_idx: NDArray, classes: NDArray) -> NDArray:
         semantic_metric += (neighbor_class == classes)
     semantic_metric /= n_neighbors
     return semantic_metric
+
+
+def semantic_metric(pdist: NDArray, classes: NDArray, k: int) -> NDArray:
+    """
+    Given a set of images and the indices of the neighbors, computes the percentage
+    of neighbors of each image that belong to its class.
+
+    Parameters:
+        pdist (np.ndarray or torch.Tensor): Pairwise distance matrix.
+        classes (np.ndarray or torch.Tensor): Classes of the neighbors.
+        k (int): Number of neighbors.
+
+    Returns:
+        np.ndarray or torch.Tensor: Semantic metric of the neighbors.
+    """
+    neighbors_idx = nearest_neighbors_from_pdist(pdist, k=k, n=pdist.shape[0])
+    return semantic_metric_calc(neighbors_idx, classes)
