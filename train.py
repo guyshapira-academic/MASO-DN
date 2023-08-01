@@ -42,7 +42,11 @@ def train(
 
     optimizer = optim.Adam(maso_dn.parameters(), lr=lr)
 
-    loss_fn = nn.functional.cross_entropy if num_classes > 2 else nn.functional.binary_cross_entropy
+    loss_fn = (
+        nn.functional.cross_entropy
+        if num_classes > 2
+        else nn.functional.binary_cross_entropy
+    )
 
     for epoch_idx in trange(n_epochs, leave=True, disable=True):
         maso_dn.train()
@@ -50,7 +54,7 @@ def train(
         for batch in it:
             x, y = batch
             y_hat = maso_dn(x)
-            #y_hat = torch.sigmoid(y_hat)
+            # y_hat = torch.sigmoid(y_hat)
             loss = loss_fn(y_hat, y)
 
             optimizer.zero_grad()

@@ -60,7 +60,8 @@ class MASOLayer(nn.Module):
             self.linear_operator = nn.Identity(**linear_operator_kwargs)
         else:
             raise ValueError(
-                f"Invalid linear operator: {linear_operator}. " "Must be one of: "
+                f"Invalid linear operator: {linear_operator}. "
+                "Must be one of: "
                 "'fc', 'conv', 'identity'"
             )
 
@@ -70,7 +71,9 @@ class MASOLayer(nn.Module):
         elif activation_function == "leaky_relu":
             self.activation_function = nn.LeakyReLU(**activation_function_kwargs)
         elif activation_function == "maxpool":
-            self.activation_function = nn.MaxPool2d(kernel_size=2, **activation_function_kwargs)
+            self.activation_function = nn.MaxPool2d(
+                kernel_size=2, **activation_function_kwargs
+            )
         elif activation_function == "identity":
             self.activation_function = nn.Identity(**activation_function_kwargs)
         else:
@@ -216,8 +219,8 @@ class MASOLayer(nn.Module):
                 p1=self.activation_function.kernel_size,
                 p2=self.activation_function.kernel_size,
             )
-            h = input_shape[2]//self.activation_function.kernel_size
-            w = input_shape[3]//self.activation_function.kernel_size
+            h = input_shape[2] // self.activation_function.kernel_size
+            w = input_shape[3] // self.activation_function.kernel_size
             input_argmax = input_.argmax(dim=-1)
             unique, partition_idx = input_argmax.unique(dim=0, return_inverse=True)
 
@@ -248,8 +251,12 @@ class MASOLayer(nn.Module):
         if isinstance(self.linear_operator, nn.Conv2d):
             x = x.reshape(x.shape[0], -1)
         if isinstance(self.activation_function, nn.MaxPool2d):
-            return self.get_local_partitions_descriptor(input_shape=input_shape_[1:], input_=x)
-        A, b = self.get_local_partitions_descriptor(input_shape=input_shape_[1:], input_=x)
+            return self.get_local_partitions_descriptor(
+                input_shape=input_shape_[1:], input_=x
+            )
+        A, b = self.get_local_partitions_descriptor(
+            input_shape=input_shape_[1:], input_=x
+        )
         z = x @ A.T + b
         if remove_redundant:
             # Convert each row from binary to decimal
@@ -299,7 +306,7 @@ class MASOLinear(MASOLayer):
         operator_kwargs = {
             "in_features": in_features,
             "out_features": out_features,
-            "bias": bias
+            "bias": bias,
         }
         super().__init__("fc", operator_kwargs, activation_function)
 
@@ -403,7 +410,6 @@ class MASODN(nn.Sequential):
         # previous layer, and update the list of partitions by taking the
         # intersection of the previous partitions and the new partitions.
         for idx in trange(l):
-
             layer = self[idx]
             local_partitions = layer.assign_local_partitions(
                 z, remove_redundant=remove_redundant
@@ -416,7 +422,9 @@ class MASODN(nn.Sequential):
                 p = utils.bin_to_dec(p.detach().numpy())
                 unique, partition_idx = np.unique(p, return_inverse=True)
                 n_partitions = len(unique)
-                partitions = torch.zeros(size=(z.shape[0], n_partitions), dtype=torch.bool)
+                partitions = torch.zeros(
+                    size=(z.shape[0], n_partitions), dtype=torch.bool
+                )
                 for i in trange(z.shape[0]):
                     partitions[i, partition_idx[i]] = True
 
@@ -458,7 +466,9 @@ class MASODN(nn.Sequential):
             z = layer(z)
         return local_partitions
 
-    def layer_local_vq_distance(self, x: Tensor, max_layer: Optional[int] = None) -> List[Tensor]:
+    def layer_local_vq_distance(
+        self, x: Tensor, max_layer: Optional[int] = None
+    ) -> List[Tensor]:
         """
         For each layer, calculates the pairwise VQ distance matrix.
 
@@ -514,7 +524,9 @@ def smallCNN(input_channels: int, bias: bool = True) -> MASODN:
     Implements a small CNN.
     """
     layers = [
-        MASOConv2d(input_channels, 32, 3, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(
+            input_channels, 32, 3, padding=0, activation_function="relu", bias=bias
+        ),
         MASOMaxPool2d(),
         MASOConv2d(32, 64, 3, padding=0, activation_function="relu", bias=bias),
         MASOMaxPool2d(),
@@ -528,7 +540,9 @@ def largeCNN(input_channels: int, bias: bool = True) -> MASODN:
     Implements a large CNN.
     """
     layers = [
-        MASOConv2d(input_channels, 96, 3, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(
+            input_channels, 96, 3, padding=0, activation_function="relu", bias=bias
+        ),
         MASOConv2d(96, 96, 3, padding=1, activation_function="relu", bias=bias),
         MASOConv2d(96, 96, 3, padding=1, activation_function="relu", bias=bias),
         MASOMaxPool2d(),

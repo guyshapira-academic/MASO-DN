@@ -38,7 +38,9 @@ def get_data(type_: str) -> Tuple[Tensor, ...]:
         train_set = datasets.MNIST(
             root="data", train=True, download=True, transform=mnist_transform
         )
-        test_set = datasets.MNIST(root="data", train=False, download=True, transform=mnist_transform)
+        test_set = datasets.MNIST(
+            root="data", train=False, download=True, transform=mnist_transform
+        )
         train_set, val_set = torch.utils.data.random_split(train_set, [50000, 10000])
     elif type_ == "cifar10":
         cifar10_transform = T.Compose(
@@ -49,7 +51,9 @@ def get_data(type_: str) -> Tuple[Tensor, ...]:
         train_set = datasets.CIFAR10(
             root="data", train=True, download=True, transform=cifar10_transform
         )
-        test_set = datasets.CIFAR10(root="data", train=False, download=True, transform=cifar10_transform)
+        test_set = datasets.CIFAR10(
+            root="data", train=False, download=True, transform=cifar10_transform
+        )
 
         train_set, val_set = torch.utils.data.random_split(train_set, [40000, 10000])
     elif type_ == "cifar100":
@@ -61,7 +65,9 @@ def get_data(type_: str) -> Tuple[Tensor, ...]:
         train_set = datasets.CIFAR100(
             root="data", train=True, download=True, transform=cifar100_transform
         )
-        test_set = datasets.CIFAR100(root="data", train=False, download=True, transform=cifar100_transform)
+        test_set = datasets.CIFAR100(
+            root="data", train=False, download=True, transform=cifar100_transform
+        )
 
         train_set, val_set = torch.utils.data.random_split(train_set, [40000, 10000])
     else:
@@ -145,30 +151,41 @@ def show_images(images, num_images, k, distance_matrix, indices=None):
     for i, image_index in enumerate(indices):
         # find the k nearest neighbors for each image
         distances = distance_matrix[image_index]
-        neighbor_indices = np.argsort(distances)[:k + 1]  # k+1 to include the image itself
+        neighbor_indices = np.argsort(distances)[
+            : k + 1
+        ]  # k+1 to include the image itself
 
         # the first column in each row is the image
-        axs[i, 0].imshow(images[image_index].squeeze(), cmap='gray')
-        axs[i, 0].axis('off')
+        axs[i, 0].imshow(images[image_index].squeeze(), cmap="gray")
+        axs[i, 0].axis("off")
 
         # the rest of the columns are the k nearest neighbors
         for j, neighbor_index in enumerate(neighbor_indices[1:], start=1):
-            axs[i, j].imshow(images[neighbor_index].squeeze(), cmap='gray')
-            axs[i, j].axis('off')
+            axs[i, j].imshow(images[neighbor_index].squeeze(), cmap="gray")
+            axs[i, j].axis("off")
 
     plt.tight_layout()
     plt.show()
 
 
-def nearest_neighbors_from_pdist(distance_matrix: NDArray, k: int = 10, n: int = 10) -> NDArray:
+def nearest_neighbors_from_pdist(
+    distance_matrix: NDArray, k: int = 10, n: int = 10
+) -> NDArray:
     """
     Given a distance matrix, return the indices of the nearest neighbors
     """
     neighbors = np.zeros((n, k), dtype=np.int32)
     for i in range(n):
-        neighbors[i, :] = np.argsort(distance_matrix[i, :])[1:k+1]
+        neighbors[i, :] = np.argsort(distance_matrix[i, :])[1 : k + 1]
     return neighbors
 
 
 if __name__ == "__main__":
-    run(dataset="cifar10", lr=0.0005, batch_size=128, epochs=1, model="smallCNN", bias=False)
+    run(
+        dataset="cifar10",
+        lr=0.0005,
+        batch_size=128,
+        epochs=1,
+        model="smallCNN",
+        bias=False,
+    )
