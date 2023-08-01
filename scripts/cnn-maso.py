@@ -1,6 +1,9 @@
 import sys
 import os
 
+import torch
+import matplotlib.pyplot as plt
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -49,6 +52,18 @@ def get_data(type_: str) -> Tuple[Tensor, ...]:
         test_set = datasets.CIFAR10(root="data", train=False, download=True, transform=cifar10_transform)
 
         train_set, val_set = torch.utils.data.random_split(train_set, [40000, 10000])
+    elif type_ == "cifar100":
+        cifar100_transform = T.Compose(
+            [
+                T.ToTensor(),
+            ]
+        )
+        train_set = datasets.CIFAR100(
+            root="data", train=True, download=True, transform=cifar100_transform
+        )
+        test_set = datasets.CIFAR100(root="data", train=False, download=True, transform=cifar100_transform)
+
+        train_set, val_set = torch.utils.data.random_split(train_set, [40000, 10000])
     else:
         raise ValueError(f"No such dataset type: {type_}")
 
@@ -66,9 +81,15 @@ def run(
     if dataset == "mnist":
         train_set, val_set, test_set = get_data("mnist")
         input_channels = 1
+        n_classes = 10
     elif dataset == "cifar10":
         train_set, val_set, test_set = get_data("cifar10")
         input_channels = 3
+        n_classes = 10
+    elif dataset == "cifar100":
+        train_set, val_set, test_set = get_data("cifar100")
+        input_channels = 3
+        n_classes = 100
     else:
         raise ValueError(f"No such dataset: {dataset}")
 
@@ -78,7 +99,7 @@ def run(
         net = maso.largeCNN(input_channels, bias=bias)
     else:
         raise ValueError(f"No such model: {model}")
-    net = nn.Sequential(net, nn.Flatten(), nn.LazyLinear(10))
+    net = nn.Sequential(net, nn.Flatten(), nn.LazyLinear(n_classes))
     print(net)
 
     # Train the network
@@ -93,7 +114,7 @@ def run(
         n_epochs=epochs,
         batch_size=batch_size,
         lr=lr,
-        num_classes=10,
+        num_classes=n_classes,
         pbar=True,
     )
 
@@ -103,21 +124,40 @@ def run(
     x_test = [x[0] for x in test_set]
     x_test = torch.stack(x_test)
 
-    partitions = maso_net.layer_local_vq_distance(x_test[:1500, ...])
+    partitions = maso_net.layer_local_vq_distance(x_test[:5000, ...])
+    indices = torch.randperm(5000)[:10]
 
     for p in partitions:
-        neighbors_idx = nearest_neighbors_from_pdist(p, k=5, n=5)
-        fig, axs = plt.subplots(nrows=5, ncols=6)
-        fig.tight_layout(pad=0.01)
+        show_images(x_test[:5000], 10, 9, p, indices)
 
-        for i in range(5):
-            axs[i, 0].imshow(x_test[i, ...].permute(1, 2, 0))
-            axs[i, 0].set_axis_off()
-            for j in range(5):
-                axs[i, j + 1].imshow(x_test[neighbors_idx[i, j], ...].permute(1, 2, 0))
-                axs[i, j + 1].set_axis_off()
 
-        plt.show()
+def show_images(images, num_images, k, distance_matrix, indices=None):
+    images = images.permute(0, 2, 3, 1).numpy()
+    if indices is None:
+        # get the indices of num_images random images
+        indices = torch.randperm(len(images))[:num_images]
+    else:
+        if len(indices) != num_images:
+            raise ValueError("Length of indices must be equal to num_images.")
+
+    fig, axs = plt.subplots(num_images, k + 1, figsize=(20, 20))
+
+    for i, image_index in enumerate(indices):
+        # find the k nearest neighbors for each image
+        distances = distance_matrix[image_index]
+        neighbor_indices = np.argsort(distances)[:k + 1]  # k+1 to include the image itself
+
+        # the first column in each row is the image
+        axs[i, 0].imshow(images[image_index].squeeze(), cmap='gray')
+        axs[i, 0].axis('off')
+
+        # the rest of the columns are the k nearest neighbors
+        for j, neighbor_index in enumerate(neighbor_indices[1:], start=1):
+            axs[i, j].imshow(images[neighbor_index].squeeze(), cmap='gray')
+            axs[i, j].axis('off')
+
+    plt.tight_layout()
+    plt.show()
 
 
 def nearest_neighbors_from_pdist(distance_matrix: NDArray, k: int = 10, n: int = 10) -> NDArray:
@@ -131,4 +171,4 @@ def nearest_neighbors_from_pdist(distance_matrix: NDArray, k: int = 10, n: int =
 
 
 if __name__ == "__main__":
-    run(dataset="cifar10", lr=0.0005, batch_size=128, epochs=10, model="smallCNN", bias=False)
+    run(dataset="cifar10", lr=0.0005, batch_size=128, epochs=1, model="smallCNN", bias=False)

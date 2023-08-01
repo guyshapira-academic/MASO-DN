@@ -146,7 +146,7 @@ class MASOLayer(nn.Module):
 
             x = einops.rearrange(x, "b a d -> b (a d)").to(torch.float)
             n = x.shape[1]
-            d = nn.functional.pdist(x, p=2) / np.sqrt(n)
+            d = nn.functional.pdist(x, p=1) / np.sqrt(n)
             return d
 
         elif isinstance(self.linear_operator, nn.Linear):
@@ -154,14 +154,14 @@ class MASOLayer(nn.Module):
             x = torch.concatenate([x, torch.logical_not(x)], dim=1)
             x = x.to(torch.int).to(torch.float)
             n = x.shape[1]
-            d = nn.functional.pdist(x, p=2) / np.sqrt(n)
+            d = nn.functional.pdist(x, p=1) / np.sqrt(n)
             return d
         elif isinstance(self.linear_operator, nn.Conv2d):
             n = x.shape[0]
             x = self.linear_operator(x) > 0
             x = x.reshape(n, -1).to(torch.float)
             n = x.shape[1]
-            d = nn.functional.pdist(x, p=2) / np.sqrt(n)
+            d = nn.functional.pdist(x, p=1) / np.sqrt(n)
             return d
 
     def get_local_partitions_descriptor(
@@ -417,7 +417,7 @@ class MASODN(nn.Sequential):
                 unique, partition_idx = np.unique(p, return_inverse=True)
                 n_partitions = len(unique)
                 partitions = torch.zeros(size=(z.shape[0], n_partitions), dtype=torch.bool)
-                for i in range(z.shape[0]):
+                for i in trange(z.shape[0]):
                     partitions[i, partition_idx[i]] = True
 
                 global_partitions = [partitions[:, i] for i in range(n_partitions)]
@@ -473,7 +473,7 @@ class MASODN(nn.Sequential):
             max_layer = len(self) - 1
 
         local_vq_distances = list()
-        for idx in range(max_layer + 1):
+        for idx in trange(max_layer + 1):
             layer = self[idx]
             d = layer.vq_pdist(z)
             d = d.detach().numpy()
