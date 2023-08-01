@@ -128,3 +128,30 @@ def iter_combinations(r):
     combinations = list(itertools.product([0, 1], repeat=r))
     combinations.sort(key=custom_sort)
     return combinations
+
+
+def semantic_metric(neighbors_idx: NDArray, classes: NDArray) -> NDArray:
+    """
+    Given a set of images and the indices of the neighbors, computes the percentage
+    of neighbors of each image that belong to its class.
+
+    Parameters:
+        neighbors_idx (np.ndarray or torch.Tensor): Index of neighbors.
+        classes (np.ndarray or torch.Tensor): Classes of the neighbors.
+
+    Returns:
+        np.ndarray or torch.Tensor: Semantic metric of the neighbors.
+    """
+    if isinstance(neighbors_idx, torch.Tensor):
+        neighbors_idx = neighbors_idx.cpu().numpy()
+    if isinstance(classes, torch.Tensor):
+        classes = classes.cpu().numpy()
+
+    n_neighbors = neighbors_idx.shape[1]
+
+    semantic_metric = np.zeros((neighbors_idx.shape[0]))
+    for i in range(n_neighbors):
+        neighbor_class = classes[neighbors_idx[:, i]]
+        semantic_metric += (neighbor_class == classes)
+    semantic_metric /= n_neighbors
+    return semantic_metric
