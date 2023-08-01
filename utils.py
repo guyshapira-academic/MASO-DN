@@ -190,5 +190,5 @@ def semantic_metric(pdist: NDArray, classes: NDArray, k: int) -> NDArray:
     Returns:
         np.ndarray or torch.Tensor: Semantic metric of the neighbors.
     """
-    neighbors_idx = nearest_neighbors_from_pdist(pdist, k=k, n=pdist.shape[0])
+    neighbors_idx = nearest_neighbors_from_pdist(pdist, k=k)
     return semantic_metric_calc(neighbors_idx, classes)

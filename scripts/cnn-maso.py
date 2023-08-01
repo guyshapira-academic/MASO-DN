@@ -128,13 +128,17 @@ def run(
 
     # Get only input of the test set
     x_test = [x[0] for x in test_set]
+    y_test = [x[1] for x in test_set]
     x_test = torch.stack(x_test)
+    y_test = torch.tensor(y_test)
 
-    partitions = maso_net.layer_local_vq_distance(x_test[:5000, ...])
-    indices = torch.randperm(5000)[:10]
+    partitions = maso_net.layer_local_vq_distance(x_test[:1500, ...])
+    indices = torch.randperm(1500)[:10]
 
-    for p in partitions:
-        show_images(x_test[:5000], 10, 9, p, indices)
+    for i, p in enumerate(partitions):
+        show_images(x_test[:1500], 10, 9, p, indices)
+        semantic_metric = utils.semantic_metric(p, y_test[:1500], 10).mean()
+        print(f"Layer {i} - Semantic Metric: {semantic_metric:.4f}")
 
 
 def show_images(images, num_images, k, distance_matrix, indices=None):
@@ -173,7 +177,7 @@ if __name__ == "__main__":
         dataset="cifar10",
         lr=0.0005,
         batch_size=128,
-        epochs=1,
+        epochs=5,
         model="smallCNN",
         bias=False,
     )
