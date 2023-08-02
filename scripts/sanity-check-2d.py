@@ -30,26 +30,41 @@ def get_data(
     x, y = None, None
     if type_ == "moons":
         x, y = datasets.make_moons(n_samples=total_size, noise=noise)
+        y = y.astype(float)
     elif type_ == "circles":
         x, y = datasets.make_circles(n_samples=total_size, noise=noise)
+        y = y.astype(float)
     elif type_ == "both":
         x_moons, y_moons = datasets.make_moons(n_samples=total_size, noise=noise)
         x_circles, y_circles = datasets.make_circles(
             n_samples=total_size, noise=noise, factor=0.5
         )
         x_moons = x_moons + 1.5
+        y_moons = y_moons + 2
         x = np.concatenate((x_moons, x_circles))
         y = np.concatenate((y_moons, y_circles))
+
     else:
         raise ValueError(f"No such dataset type: {type_}")
+
+    # Normalize
+    x = (x - x.mean(axis=0)) / x.std(axis=0)
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.2)
 
     x_train = torch.from_numpy(x_train).to(torch.float)
-    y_train = torch.from_numpy(y_train.reshape(-1, 1)).to(torch.float)
+    y_train = torch.from_numpy(y_train.reshape(-1, 1))
 
     x_test = torch.from_numpy(x_test).to(torch.float)
-    y_test = torch.from_numpy(y_test.reshape(-1, 1)).to(torch.float)
+    y_test = torch.from_numpy(y_test.reshape(-1, 1))
+
+    if type_ == "both":
+        y_train = y_train.flatten().to(torch.long)
+        y_test = y_test.flatten().to(torch.long)
+    else:
+        y_train = y_train.to(torch.float)
+        y_test = y_test.to(torch.float)
+
 
     return x_train, y_train, x_test, y_test
 
@@ -63,11 +78,19 @@ def run(
     epochs: int = 100,
     name: Optional[str] = None,
 ) -> None:
-    net = maso.fc_network((2, 8, 8, 4, 1))
-    net = nn.Sequential(
-        net,
-        nn.Sigmoid(),
-    )
+    out_dim = 4 if dataset == "both" else 1
+    maso_net = maso.fc_network((2, 8, 4, 4, out_dim))
+
+    if dataset == "both":
+        net = nn.Sequential(
+            maso_net,
+            nn.Softmax(dim=1),
+        )
+    else:
+        net = nn.Sequential(
+            maso_net,
+            nn.Sigmoid(),
+        )
     x_train, y_train, x_test, y_test = get_data(dataset, n_samples, noise)
 
     # Train the network
@@ -80,8 +103,11 @@ def run(
         n_epochs=epochs,
         batch_size=batch_size,
         lr=lr,
-        num_classes=2,
+        num_classes=4 if dataset == "both" else 2,
+        pbar=False
     )
+
+    net = net[0]
 
     # Extract partitioning
     range_x = x_train[:, 0].min().item(), x_train[:, 0].max().item()
@@ -91,7 +117,10 @@ def run(
     X = X.reshape(-1, 1)
     Y = Y.reshape(-1, 1)
     grid = torch.cat((X, Y), dim=1)
-    Z = net(grid).detach().numpy().reshape(500, 500)
+    if dataset != "both":
+        Z = net(grid).detach().numpy().reshape(500, 500)
+    else:
+        Z = None
 
     global_partitions = net.assign_global_partition(grid, remove_redundant=True)
     num_partitions = global_partitions.shape[1]
@@ -104,11 +133,12 @@ def run(
     boundary = np.flipud(boundary)
     X = X.reshape(500, 500)
     Y = Y.reshape(500, 500)
-    plt.contourf(X, Y, Z, levels=16, cmap="RdBu_r", alpha=0.5)
+    if dataset != "both":
+        plt.contourf(X, Y, Z, levels=16, cmap="RdBu_r", alpha=0.5)
     plt.scatter(
         x_train[:, 0],
         x_train[:, 1],
-        c=y_train[:, 0],
+        c=y_train,
         cmap="RdBu_r",
         marker="x",
         alpha=0.05,
@@ -125,9 +155,9 @@ def run(
 
 
 if __name__ == "__main__":
-    epochs = 50
-    batch_size = 8
-    lr = 0.1
+    epochs = 10
+    batch_size = 32
+    lr = 0.01
 
     run(
         "moons",

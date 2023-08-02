@@ -9,7 +9,7 @@ from torch import Tensor
 from tqdm import tqdm, trange
 
 import einops
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import squareform, pdist
 
 import utils
 
@@ -483,6 +483,7 @@ class MASODN(nn.Sequential):
             max_layer = len(self) - 1
 
         local_vq_distances = list()
+        l2_dist = list()
         for idx in trange(max_layer + 1):
             layer = self[idx]
             d = layer.vq_pdist(z)
@@ -490,7 +491,12 @@ class MASODN(nn.Sequential):
             d = squareform(d)
             local_vq_distances.append(d)
             z = layer(z)
-        return local_vq_distances
+            n = z.shape[0]
+            layer_output = z.detach().numpy().reshape(n, -1)
+            l2 = pdist(layer_output, metric="cosine")
+            l2 = squareform(l2)
+            l2_dist.append(l2)
+        return local_vq_distances, l2_dist
 
 
 def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:

@@ -37,7 +37,7 @@ def train(
     else:
         test_dataset = val_set
 
-    train_loader = tdata.DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
+    train_loader = tdata.DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
     test_loader = tdata.DataLoader(test_dataset, batch_size=batch_size)
 
     optimizer = optim.Adam(maso_dn.parameters(), lr=lr)
@@ -55,7 +55,7 @@ def train(
             x, y = batch
             y_hat = maso_dn(x)
             # y_hat = torch.sigmoid(y_hat)
-            loss = loss_fn(y_hat, y)
+            loss = loss_fn(y_hat, y.squeeze() if num_classes > 2 else y)
 
             optimizer.zero_grad()
             loss.backward()
@@ -73,7 +73,7 @@ def train(
                 if num_classes > 2:
                     y_hat = torch.argmax(y_hat, dim=1)
                 else:
-                    y_hat = y_hat > 0
+                    y_hat = (y_hat > 0.5).to(torch.float)
 
                 accuracy = torch.mean((y_hat == y).to(torch.float))
                 accuracy = accuracy.item()
