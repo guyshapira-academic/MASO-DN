@@ -42,6 +42,7 @@ class MASOLayer(nn.Module):
         linear_operator_kwargs: Optional[Dict[str, Any]] = None,
         activation_function: str = "relu",
         activation_function_kwargs: Optional[Dict[str, Any]] = None,
+        batch_norm: bool = False,
     ):
         super().__init__()
 
@@ -82,6 +83,12 @@ class MASOLayer(nn.Module):
                 "Must be one of: 'relu', 'leaky_relu', 'abs', 'maxpool'"
             )
 
+        self.batch_norm = batch_norm
+        if self.batch_norm and isinstance(self.linear_operator, nn.Linear):
+            self.bn = nn.BatchNorm1d(self.linear_operator.out_features)
+        elif self.batch_norm and isinstance(self.linear_operator, nn.Conv2d):
+            self.bn = nn.BatchNorm2d(self.linear_operator.out_channels)
+
     def forward(self, x: Tensor) -> Tensor:
         """
         Forward pass of the layer.
@@ -94,6 +101,8 @@ class MASOLayer(nn.Module):
         """
         x = self.linear_operator(x)
         x = self.activation_function(x)
+        if self.batch_norm:
+            x = self.bn(x)
         return x
 
     @property
@@ -333,6 +342,7 @@ class MASOConv2d(MASOLayer):
         padding: int = 0,
         activation_function: str = "relu",
         bias: bool = True,
+        batch_norm: bool = False,
     ) -> None:
         operator_kwargs = {
             "in_channels": in_channels,
@@ -342,7 +352,7 @@ class MASOConv2d(MASOLayer):
             "padding": padding,
             "bias": bias,
         }
-        super().__init__("conv", operator_kwargs, activation_function)
+        super().__init__("conv", operator_kwargs, activation_function, batch_norm=batch_norm)
 
 
 class MASOMaxPool2d(MASOLayer):
@@ -499,12 +509,14 @@ class MASODN(nn.Sequential):
         return local_vq_distances, l2_dist
 
 
-def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
+def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1), bias: bool = True, bn: bool = False) -> MASODN:
     """
     Returns a fully connected network with the specified number of features.
 
     Parameters:
         n_feature (tuple): Number of features per layer
+        bias (bool): If True, use bias terms
+        bn (bool): If True, use batch normalization
 
     Returns:
         MASODN: Fully connected network
@@ -518,25 +530,28 @@ def fc_network(n_feature: Tuple[int, ...] = (2, 4, 4, 1)) -> MASODN:
                 linear_operator_kwargs={
                     "in_features": n_feature[idx],
                     "out_features": n_feature[idx + 1],
+                    "bias": bias,
                 },
                 activation_function=activation_function,
+                batch_norm=bn,
             )
         )
     return MASODN(*layers)
 
 
-def smallCNN(input_channels: int, bias: bool = True) -> MASODN:
+def smallCNN(input_channels: int, bias: bool = True, batch_norm: bool = False) -> MASODN:
     """
     Implements a small CNN.
     """
     layers = [
         MASOConv2d(
-            input_channels, 32, 3, padding=0, activation_function="relu", bias=bias
+            input_channels, 32, 3, padding=0, activation_function="relu", bias=bias,
+            batch_norm=batch_norm
         ),
         MASOMaxPool2d(),
-        MASOConv2d(32, 64, 3, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(32, 64, 3, padding=0, activation_function="relu", bias=bias, batch_norm=batch_norm),
         MASOMaxPool2d(),
-        MASOConv2d(64, 128, 1, padding=0, activation_function="relu", bias=bias),
+        MASOConv2d(64, 128, 1, padding=0, activation_function="relu", bias=bias, batch_norm=batch_norm),
     ]
     return MASODN(*layers)
 

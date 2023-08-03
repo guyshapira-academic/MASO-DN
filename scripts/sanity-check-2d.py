@@ -79,7 +79,7 @@ def run(
     name: Optional[str] = None,
 ) -> None:
     out_dim = 4 if dataset == "both" else 1
-    maso_net = maso.fc_network((2, 8, 4, 4, out_dim))
+    maso_net = maso.fc_network((2, 8, 4, 4, out_dim), bias=False, bn=True)
 
     if dataset == "both":
         net = nn.Sequential(

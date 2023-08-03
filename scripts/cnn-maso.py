@@ -83,6 +83,7 @@ def run(
     batch_size: int = 32,
     epochs: int = 1,
     bias: bool = True,
+    batch_norm: bool = False,
 ) -> None:
     if dataset == "mnist":
         train_set, val_set, test_set = get_data("mnist")
@@ -100,9 +101,9 @@ def run(
         raise ValueError(f"No such dataset: {dataset}")
 
     if model == "smallCNN":
-        net = maso.smallCNN(input_channels, bias=bias)
+        net = maso.smallCNN(input_channels, bias=bias, batch_norm=batch_norm)
     elif model == "largeCNN":
-        net = maso.largeCNN(input_channels, bias=bias)
+        net = maso.largeCNN(input_channels, bias=bias, batch_norm=batch_norm)
     else:
         raise ValueError(f"No such model: {model}")
     net = nn.Sequential(net, nn.Flatten(), nn.LazyLinear(n_classes))
@@ -180,7 +181,8 @@ if __name__ == "__main__":
         dataset="cifar10",
         lr=0.0005,
         batch_size=128,
-        epochs=2,
+        epochs=10,
         model="smallCNN",
-        bias=True,
+        bias=False,
+        batch_norm=True,
     )
