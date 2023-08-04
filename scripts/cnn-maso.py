@@ -97,6 +97,11 @@ def run(
         train_set, val_set, test_set = get_data("cifar100")
         input_channels = 3
         n_classes = 100
+    elif dataset == "hybrid":
+        train_set, val_set, _ = get_data("cifar100")
+        _, _, test_set = get_data("cifar10")
+        input_channels = 3
+        n_classes = 100
     else:
         raise ValueError(f"No such dataset: {dataset}")
 
@@ -185,6 +190,7 @@ def show_images(images, num_images, k, distance_matrix, indices=None, layer_idx=
         plt.tight_layout()
         plt.savefig(f"images/cnn_image_{i}_layer_{layer_idx}.png"
                     f"", bbox_inches='tight', pad_inches=0)
+        plt.close()
 
         # axs[i, 0].imshow(images[image_index].squeeze(), cmap="gray")
         # axs[i, 0].axis("off")
@@ -226,13 +232,22 @@ def generate_latex_table(data, columns, rows):
     return latex_table
 
 
-
 if __name__ == "__main__":
     run(
-        dataset="cifar10",
+        dataset="hybrid",
         lr=0.00005,
         batch_size=128,
-        epochs=50,
+        epochs=0,
+        model="smallCNN",
+        bias=False,
+        batch_norm=True,
+    )
+
+    run(
+        dataset="hybrid",
+        lr=0.00005,
+        batch_size=128,
+        epochs=5,
         model="smallCNN",
         bias=False,
         batch_norm=True,
