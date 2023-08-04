@@ -136,16 +136,22 @@ def run(
     N = 1000
 
     partitions, l2_distances = maso_net.layer_local_vq_distance(x_test[:N, ...])
-    indices = torch.randperm(N)[:10]
+    indices = torch.randperm(N)[:3]
 
+    metrics_table = []
     for i, (p, l) in enumerate(zip(partitions, l2_distances)):
-        show_images(x_test[:N], 10, 9, p, indices)
+        show_images(x_test[:N], 3, 15, p, indices, i+1)
         semantic_metric = utils.semantic_metric(p, y_test[:N], 10).mean()
         l2_semantic_metric = utils.semantic_metric(l, y_test[:N], 10).mean()
         print(f"Layer {i} - VQ Semantic Metric: {semantic_metric:.4f}, CS Semantic Metric: {l2_semantic_metric:.4f}")
 
+        metrics_table.append([semantic_metric, l2_semantic_metric])
 
-def show_images(images, num_images, k, distance_matrix, indices=None):
+    with open("images/table.txt", "w") as f:
+        f.write(generate_latex_table(metrics_table, columns=["VQ", "CS"], rows=[f"{i}" for i in range(1, 6)]))
+
+
+def show_images(images, num_images, k, distance_matrix, indices=None, layer_idx=1):
     images = images.permute(0, 2, 3, 1).numpy()
     if indices is None:
         # get the indices of num_images random images
@@ -154,7 +160,7 @@ def show_images(images, num_images, k, distance_matrix, indices=None):
         if len(indices) != num_images:
             raise ValueError("Length of indices must be equal to num_images.")
 
-    fig, axs = plt.subplots(num_images, k + 1, figsize=(20, 20))
+    # fig, axs = plt.subplots(num_images, k + 1, figsize=(20, 20))
 
     for i, image_index in enumerate(indices):
         # find the k nearest neighbors for each image
@@ -163,25 +169,70 @@ def show_images(images, num_images, k, distance_matrix, indices=None):
             : k + 1
         ]  # k+1 to include the image itself
 
+        fig, axs = plt.subplots(int(np.sqrt(k + 1)), int(np.sqrt(k + 1)), figsize=(10, 10))
+        # fig.suptitle(f"Layer #{layer_idx}", fontsize=32)
+
         # the first column in each row is the image
-        axs[i, 0].imshow(images[image_index].squeeze(), cmap="gray")
-        axs[i, 0].axis("off")
+        for j in range(int(np.sqrt(k + 1))):
+            for l in range(int(np.sqrt(k + 1))):
+                if j == 0 and k == 0:
+                    axs[j, l].imshow(images[image_index].squeeze(), cmap="gray")
+                    axs[j, l].axis("off")
+                else:
+                    axs[j, l].imshow(images[neighbor_indices[j * int(np.sqrt(k + 1)) + l]].squeeze(), cmap="gray")
+                    axs[j, l].axis("off")
+
+        plt.tight_layout()
+        plt.savefig(f"images/cnn_image_{i}_layer_{layer_idx}.png"
+                    f"", bbox_inches='tight', pad_inches=0)
+
+        # axs[i, 0].imshow(images[image_index].squeeze(), cmap="gray")
+        # axs[i, 0].axis("off")
 
         # the rest of the columns are the k nearest neighbors
-        for j, neighbor_index in enumerate(neighbor_indices[1:], start=1):
-            axs[i, j].imshow(images[neighbor_index].squeeze(), cmap="gray")
-            axs[i, j].axis("off")
+        # for j, neighbor_index in enumerate(neighbor_indices[1:], start=1):
+        #     axs[i, j].imshow(images[neighbor_index].squeeze(), cmap="gray")
+        #     axs[i, j].axis("off")
 
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
+
+
+def generate_latex_table(data, columns, rows):
+    num_columns = len(columns)
+    if not all(len(row) == num_columns for row in data):
+        raise ValueError("All data rows must have the same length as columns list")
+
+    latex_table = "\\begin{{tabular}}{{|c|{}|}}\n".format("c|"*num_columns)
+    latex_table += "\\hline\n"
+
+    # Add column names
+    latex_table += " & " + " & ".join(columns) + "\\\\\n"
+    latex_table += "\\hline\n"
+
+    # Add rows
+    for i, row_data in enumerate(data):
+        formatted_row_data = []
+        for x in row_data:
+            if isinstance(x, float):
+                formatted_row_data.append("{:.4f}".format(x))
+            else:
+                formatted_row_data.append(str(x))
+        latex_table += rows[i] + " & " + " & ".join(formatted_row_data) + "\\\\\n"
+        latex_table += "\\hline\n"
+
+    latex_table += "\\end{tabular}"
+
+    return latex_table
+
 
 
 if __name__ == "__main__":
     run(
         dataset="cifar10",
-        lr=0.0005,
+        lr=0.00005,
         batch_size=128,
-        epochs=10,
+        epochs=50,
         model="smallCNN",
         bias=False,
         batch_norm=True,

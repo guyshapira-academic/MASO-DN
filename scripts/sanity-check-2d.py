@@ -65,7 +65,6 @@ def get_data(
         y_train = y_train.to(torch.float)
         y_test = y_test.to(torch.float)
 
-
     return x_train, y_train, x_test, y_test
 
 
@@ -149,9 +148,42 @@ def run(
         cmap="Greys",
         alpha=1,
     )
+    plt.tight_layout()
     if name is not None:
-        plt.savefig(f"{name}.png")
-    plt.show()
+        plt.savefig(f"images/global_{name}.png")
+
+    grid = grid.reshape(-1, 2)
+
+    local_partitions = net.assign_local_partitions(grid)
+    grid = grid.reshape(500, 500, -1)
+
+    # Plot local partitions
+    for i, p in enumerate(local_partitions):
+        if i == len(p) - 1:
+            break
+        boundary = utils.get_class_boundary(p.reshape(500, 500, -1).detach().numpy())
+        boundary = np.flipud(boundary)
+        if dataset != "both":
+            plt.contourf(X, Y, Z, levels=16, cmap="RdBu_r", alpha=0.5)
+        plt.scatter(
+            x_train[:, 0],
+            x_train[:, 1],
+            c=y_train,
+            cmap="RdBu_r",
+            marker="x",
+            alpha=0.05,
+        )
+        plt.imshow(
+            boundary,
+            extent=[range_x[0], range_x[1], range_y[0], range_y[1]],
+            cmap="Greys",
+            alpha=1,
+        )
+        plt.tight_layout()
+        if name is not None:
+            plt.savefig(f"images/local_{name}_{i}.png")
+        plt.show()
+
 
 
 if __name__ == "__main__":
@@ -161,7 +193,7 @@ if __name__ == "__main__":
 
     run(
         "moons",
-        n_samples=10000,
+        n_samples=1000,
         noise=0.1,
         lr=lr,
         epochs=epochs,
@@ -170,7 +202,7 @@ if __name__ == "__main__":
     )
     run(
         "circles",
-        n_samples=10000,
+        n_samples=1000,
         noise=0.1,
         lr=lr,
         epochs=epochs,
@@ -179,7 +211,7 @@ if __name__ == "__main__":
     )
     run(
         "both",
-        n_samples=10000,
+        n_samples=1000,
         noise=0.1,
         lr=lr,
         epochs=epochs,
