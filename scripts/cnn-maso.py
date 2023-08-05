@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 from numpy.typing import NDArray
-
+import cv2
 import maso
 
 _root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -84,6 +84,7 @@ def run(
     epochs: int = 1,
     bias: bool = True,
     batch_norm: bool = False,
+    name: str = "untrained",
 ) -> None:
     if dataset == "mnist":
         train_set, val_set, test_set = get_data("mnist")
@@ -138,25 +139,25 @@ def run(
     x_test = torch.stack(x_test)
     y_test = torch.tensor(y_test)
 
-    N = 1000
+    N = 5000
 
     partitions, l2_distances = maso_net.layer_local_vq_distance(x_test[:N, ...])
-    indices = torch.randperm(N)[:3]
+    indices = torch.randperm(N)[:10]
 
     metrics_table = []
     for i, (p, l) in enumerate(zip(partitions, l2_distances)):
-        show_images(x_test[:N], 3, 15, p, indices, i+1)
+        show_images(x_test[:N], 10, 15, p, indices, i+1, name=name)
         semantic_metric = utils.semantic_metric(p, y_test[:N], 10).mean()
         l2_semantic_metric = utils.semantic_metric(l, y_test[:N], 10).mean()
         print(f"Layer {i} - VQ Semantic Metric: {semantic_metric:.4f}, CS Semantic Metric: {l2_semantic_metric:.4f}")
 
         metrics_table.append([semantic_metric, l2_semantic_metric])
 
-    with open("images/table.txt", "w") as f:
+    with open(f"images_2/table_{name}.txt", "w") as f:
         f.write(generate_latex_table(metrics_table, columns=["VQ", "CS"], rows=[f"{i}" for i in range(1, 6)]))
 
 
-def show_images(images, num_images, k, distance_matrix, indices=None, layer_idx=1):
+def show_images(images, num_images, k, distance_matrix, indices=None, layer_idx=1, name="images"):
     images = images.permute(0, 2, 3, 1).numpy()
     if indices is None:
         # get the indices of num_images random images
@@ -188,7 +189,7 @@ def show_images(images, num_images, k, distance_matrix, indices=None, layer_idx=
                     axs[j, l].axis("off")
 
         plt.tight_layout()
-        plt.savefig(f"images/cnn_image_{i}_layer_{layer_idx}.png"
+        plt.savefig(f"images/cnn_image_{i}_layer_{layer_idx}_{name}.png"
                     f"", bbox_inches='tight', pad_inches=0)
         plt.close()
 
@@ -237,18 +238,9 @@ if __name__ == "__main__":
         dataset="hybrid",
         lr=0.00005,
         batch_size=128,
-        epochs=0,
+        epochs=30,
         model="smallCNN",
         bias=False,
         batch_norm=True,
-    )
-
-    run(
-        dataset="hybrid",
-        lr=0.00005,
-        batch_size=128,
-        epochs=5,
-        model="smallCNN",
-        bias=False,
-        batch_norm=True,
+        name="trained"
     )

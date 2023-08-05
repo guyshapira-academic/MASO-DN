@@ -140,7 +140,7 @@ def run(
         c=y_train,
         cmap="RdBu_r",
         marker="x",
-        alpha=0.05,
+        alpha=0.2,
     )
     plt.imshow(
         boundary,
@@ -149,8 +149,11 @@ def run(
         alpha=1,
     )
     plt.tight_layout()
+    plt.axis("off")
     if name is not None:
-        plt.savefig(f"images/global_{name}.png")
+        plt.savefig(f"images/global_{name}.png",  pad_inches=0, bbox_inches="tight")
+    plt.show()
+    plt.close()
 
     grid = grid.reshape(-1, 2)
 
@@ -171,7 +174,7 @@ def run(
             c=y_train,
             cmap="RdBu_r",
             marker="x",
-            alpha=0.05,
+            alpha=0.2,
         )
         plt.imshow(
             boundary,
@@ -180,10 +183,10 @@ def run(
             alpha=1,
         )
         plt.tight_layout()
+        plt.axis("off")
         if name is not None:
-            plt.savefig(f"images/local_{name}_{i}.png")
+            plt.savefig(f"images/local_{name}_{i}.png", pad_inches=0, bbox_inches="tight")
         plt.show()
-
 
 
 if __name__ == "__main__":
